@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file:;" />
+    <title>AP Rechnungstool</title>
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+    <div class="app-shell">
+        <nav class="sidebar">
+            <div class="sidebar-title">AP Rechnungstool</div>
+            <form class="sidebar-suche" id="globale-suche-formular">
+                <input type="search" name="q" placeholder="Suche…" />
+            </form>
+            <a href="#/dashboard" class="nav-link" data-route="dashboard">Übersicht</a>
+            <a href="#/profiles" class="nav-link" data-route="profiles">Absenderprofile</a>
+            <a href="#/customers" class="nav-link" data-route="customers">Adressbuch</a>
+            <a href="#/artikel" class="nav-link" data-route="artikel">Artikel</a>
+            <a href="#/invoices" class="nav-link" data-route="invoices">Rechnungen</a>
+            <a href="#/belege" class="nav-link" data-route="belege">Angebot/Lieferschein/AB</a>
+            <a href="#/mahnungen" class="nav-link" data-route="mahnungen">Mahnungen</a>
+            <a href="#/notizen" class="nav-link" data-route="notizen">Notizen</a>
+            <a href="#/statistik" class="nav-link" data-route="statistik">Statistik</a>
+            <a href="#/export" class="nav-link" data-route="export">Steuerberater-Export</a>
+            <a href="#/einstellungen" class="nav-link" data-route="einstellungen">Einstellungen</a>
+        </nav>
+        <main id="view" class="content"></main>
+    </div>
+
+    <script src="js/helpers.js"></script>
+    <script src="js/view-dashboard.js"></script>
+    <script src="js/view-profiles.js"></script>
+    <script src="js/view-customers.js"></script>
+    <script src="js/view-artikel.js"></script>
+    <script src="js/view-invoices.js"></script>
+    <script src="js/view-belege.js"></script>
+    <script src="js/view-mahnungen.js"></script>
+    <script src="js/view-notizen.js"></script>
+    <script src="js/view-statistik.js"></script>
+    <script src="js/view-suche.js"></script>
+    <script src="js/view-export.js"></script>
+    <script src="js/view-einstellungen.js"></script>
+    <script src="js/login-gate.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

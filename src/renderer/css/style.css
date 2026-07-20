@@ -1,0 +1,235 @@
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    color: #1c1e21;
+    background: #f4f5f7;
+}
+
+.app-shell {
+    display: flex;
+    height: 100vh;
+}
+
+.sidebar {
+    width: 220px;
+    background: #1f2a37;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 0;
+    flex-shrink: 0;
+}
+
+.sidebar-title {
+    font-weight: 600;
+    font-size: 15px;
+    padding: 0 20px 20px;
+    border-bottom: 1px solid #33414f;
+    margin-bottom: 10px;
+}
+
+.nav-link {
+    color: #cbd3db;
+    text-decoration: none;
+    padding: 10px 20px;
+    font-size: 14px;
+}
+
+.nav-link:hover { background: #29384a; color: #fff; }
+.nav-link.aktiv { background: #2f6feb; color: #fff; }
+
+.content {
+    flex: 1;
+    padding: 28px 36px;
+    overflow-y: auto;
+}
+
+h1 { font-size: 22px; margin: 0 0 20px; }
+h2 { font-size: 17px; margin: 24px 0 12px; }
+h3 { font-size: 14px; margin: 20px 0 8px; color: #4b5563; }
+
+.view-kopf {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+}
+
+.btn {
+    background: #fff;
+    border: 1px solid #d0d5dd;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+}
+.btn:hover { background: #f0f1f3; }
+.btn-primary { background: #2f6feb; color: #fff; border-color: #2f6feb; }
+.btn-primary:hover { background: #245ac6; }
+.btn-klein { padding: 4px 9px; font-size: 12px; margin-right: 4px; }
+.btn-gefahr { color: #b42318; border-color: #f0c2bd; }
+
+.kachel-reihe {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 28px;
+    overflow-x: auto;
+}
+.kachel {
+    background: #fff;
+    border: 1px solid #e3e6ea;
+    border-radius: 8px;
+    padding: 18px 24px;
+    min-width: 160px;
+}
+.kachel-zahl { font-size: 26px; font-weight: 700; }
+.kachel-label { font-size: 12px; color: #667085; margin-top: 4px; }
+.kachel-link { display: block; text-decoration: none; color: inherit; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.kachel-link:hover { border-color: #2f6feb; box-shadow: 0 1px 6px rgba(47,111,235,0.18); }
+
+.sidebar-suche { padding: 0 20px 14px; }
+.sidebar-suche input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 10px;
+    border-radius: 5px;
+    border: 1px solid #33414f;
+    background: #29384a;
+    color: #fff;
+    font-size: 13px;
+}
+.sidebar-suche input::placeholder { color: #8b98a6; }
+
+.balkendiagramm { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.balken-zeile { display: grid; grid-template-columns: 160px 1fr 100px; align-items: center; gap: 10px; }
+.balken-label { font-size: 13px; color: #344054; }
+.balken-spur { background: #eef0f2; border-radius: 5px; height: 16px; overflow: hidden; }
+.balken { height: 100%; border-radius: 5px; }
+.balken-wert { font-size: 13px; text-align: right; font-weight: 600; }
+
+.tabelle {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border: 1px solid #e3e6ea;
+    border-radius: 8px;
+    overflow-x: auto;
+    display: block;
+}
+.tabelle thead, .tabelle tbody { display: table; width: 100%; table-layout: fixed; }
+.tabelle th, .tabelle td {
+    text-align: left;
+    padding: 9px 12px;
+    font-size: 13px;
+    border-bottom: 1px solid #eef0f2;
+    overflow-wrap: break-word;
+}
+.tabelle th { color: #667085; font-weight: 600; font-size: 12px; }
+
+.status {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    background: #eef0f2;
+    white-space: nowrap;
+}
+.status-versendet { background: #d1fadf; color: #027a48; }
+.status-entwurf { background: #fef0c7; color: #b54708; }
+
+.karten-liste {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+}
+.karte {
+    background: #fff;
+    border: 1px solid #e3e6ea;
+    border-radius: 8px;
+    padding: 16px;
+    width: 260px;
+}
+.karte h3 { margin: 0 0 8px; color: #1c1e21; font-size: 15px; }
+.karte-zeile { font-size: 12px; color: #667085; margin-bottom: 3px; }
+.karte-aktionen { margin-top: 10px; }
+
+.formular {
+    background: #fff;
+    border: 1px solid #e3e6ea;
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 18px;
+    max-width: 720px;
+}
+.formular-raster {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 16px;
+}
+.formular label {
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    color: #4b5563;
+    gap: 4px;
+    margin-top: 10px;
+}
+.formular input, .formular select, .formular textarea {
+    font-size: 13px;
+    padding: 7px 9px;
+    border: 1px solid #d0d5dd;
+    border-radius: 5px;
+    font-family: inherit;
+}
+.formular textarea { min-height: 60px; }
+.formular-aktionen { margin-top: 18px; display: flex; gap: 8px; }
+
+.logo-zeile { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+
+.summenzeile {
+    margin-top: 14px;
+    text-align: right;
+    font-size: 13px;
+    line-height: 1.7;
+}
+.summe-gesamt { font-weight: 700; font-size: 15px; }
+
+#positionen-tabelle th:nth-child(1), #positionen-tabelle td:nth-child(1) { width: 9%; }
+#positionen-tabelle th:nth-child(2), #positionen-tabelle td:nth-child(2) { width: 25%; }
+#positionen-tabelle th:nth-child(3), #positionen-tabelle td:nth-child(3) { width: 9%; }
+#positionen-tabelle th:nth-child(4), #positionen-tabelle td:nth-child(4) { width: 12%; }
+#positionen-tabelle th:nth-child(5), #positionen-tabelle td:nth-child(5) { width: 19%; }
+#positionen-tabelle th:nth-child(6), #positionen-tabelle td:nth-child(6) { width: 14%; }
+#positionen-tabelle th:nth-child(7), #positionen-tabelle td:nth-child(7) { width: 36px; text-align: center; }
+#positionen-tabelle select,
+#positionen-tabelle input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* thead und tbody sind hier zwei unabhängige display:table-Boxen (siehe
+   .tabelle oben) und berechnen table-layout:fixed daher jeweils für sich -
+   die Breiten müssen deshalb auf th UND td gesetzt werden. */
+#rechnungen-tabelle th:nth-child(5), #rechnungen-tabelle td:nth-child(5) { width: 11%; }
+#rechnungen-tabelle th:nth-child(6), #rechnungen-tabelle td:nth-child(6) { width: 15%; }
+#rechnungen-tabelle th:last-child, #rechnungen-tabelle td:last-child { width: 31%; }
+.aktionen-zelle {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+}
+.aktionen-zelle .btn-klein { margin-right: 0; padding: 4px 7px; font-size: 11px; }
+
+.fehler-banner {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    background: #b42318;
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    z-index: 999;
+}

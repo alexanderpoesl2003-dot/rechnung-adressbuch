@@ -1,0 +1,71 @@
+{
+  "name": "rechnung-adressbuch",
+  "version": "0.2.0",
+  "description": "Rechnungs- und Adressbuch-Desktopanwendung mit mehreren Absenderprofilen",
+  "main": "src/main/main.js",
+  "author": "Alexander Pösl",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "prep:win-native": "node scripts/fetch-win-native.js",
+    "dist": "npm run prep:win-native && electron-builder --win",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.9.1",
+    "call-bind-apply-helpers": "^1.0.2",
+    "electron-updater": "^6.3.9",
+    "iconv-lite": "^0.6.3",
+    "pdfkit": "^0.15.2"
+  },
+  "devDependencies": {
+    "electron": "^32.2.7",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "de.poesl.rechnung-adressbuch",
+    "productName": "AP Rechnungstool",
+    "asar": false,
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "afterPack": "scripts/afterPack.js",
+    "publish": {
+      "provider": "github",
+      "owner": "alexanderpoesl2003-dot",
+      "repo": "rechnung-adressbuch",
+      "releaseType": "release"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icons/icon.png"
+    },
+    "mac": {
+      "icon": "assets/icons/icon.png"
+    },
+    "linux": {
+      "icon": "assets/icons/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

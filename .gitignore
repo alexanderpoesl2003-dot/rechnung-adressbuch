@@ -1,0 +1,18 @@
+node_modules/
+dist/
+out/
+*.log
+.native-cache/
+.DS_Store
+
+# Lokale Anwendungsdaten (Datenbank, hochgeladene Logos) - nicht versionieren
+userdata/
+*.sqlite
+*.sqlite-journal
+
+# Enthält echte Kundendaten (Namen, Adressen) - niemals committen/pushen
+Kundendaten_extrahiert.csv
+
+# Fremdes, urheberrechtlich geschütztes Handbuch (RS-Office Pro, RSP Software
+# GmbH) - keine eigene Projektdatei, Weitergabe laut Lizenz untersagt
+Handbuch.pdf

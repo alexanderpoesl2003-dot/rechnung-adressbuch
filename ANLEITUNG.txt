@@ -1,0 +1,354 @@
+================================================================================
+                         AP RECHNUNGSTOOL
+              Installations- und Bedienungsanleitung
+================================================================================
+
+
+INHALTSVERZEICHNIS
+--------------------------------------------------------------------------------
+ 1. Installation
+ 2. Erste Schritte
+ 3. Uebersicht (Dashboard)
+ 4. Absenderprofile
+ 5. Adressbuch
+ 6. Artikel-Stammdaten
+ 7. Rechnungen
+ 8. Weitere Belegarten (Angebot, Lieferschein, AB, Korrektur, Barbeleg)
+ 9. Mahnungen
+10. Notizen
+11. Einstellungen (Backup, Passwortschutz, Version)
+12. Textbausteine und Extrafeld
+13. PDF-Vorschau, Drucken, E-Mail-Versand
+14. Automatische Updates
+15. Daten, Speicherort und Sicherung
+16. Haeufige Fragen / Tipps
+
+
+================================================================================
+ 1. INSTALLATION
+================================================================================
+
+  1. Datei "AP Rechnungstool Setup <Version>.exe" auf den Windows-PC kopieren.
+  2. Doppelklick zum Starten des Installationsprogramms.
+  3. Windows zeigt moeglicherweise eine SmartScreen-Warnung
+     ("Windows hat den Computer geschuetzt"), da die App nicht mit einem
+     kostenpflichtigen Zertifikat signiert ist.
+       -> Auf "Weitere Informationen" klicken, dann "Trotzdem ausfuehren".
+  4. Installationsordner bestaetigen oder per "Auswaehlen" aendern.
+  5. "Installieren" klicken und den Vorgang abwarten.
+  6. Nach Abschluss liegt eine Verknuepfung auf dem Desktop und im
+     Startmenue unter "AP Rechnungstool".
+
+  Hinweis: Es muss nichts zusaetzlich installiert werden - kein Node.js,
+  kein separates PDF-Programm, kein Drucker-Treiber-Zusatz. Die App bringt
+  alles Noetige selbst mit. Es werden auch keine Administratorrechte
+  benoetigt (Installation erfolgt in das Benutzerprofil).
+
+  Deinstallation: ueber "Apps" in den Windows-Einstellungen oder das
+  Startmenue. Dabei bleiben alle gespeicherten Daten (Kunden, Rechnungen
+  usw.) automatisch erhalten - siehe Kapitel 15.
+
+
+================================================================================
+ 2. ERSTE SCHRITTE
+================================================================================
+
+  Beim allerersten Start sind bereits zwei Absenderprofile angelegt:
+    - Biohof Poesl
+    - Maschinengemeinschaft
+
+  Empfohlene Reihenfolge fuer den Einstieg:
+
+  1. Unter "Absenderprofile" die eigenen Firmendaten pruefen/ergaenzen
+     (Adresse, Bankverbindung, Steuernummer, Logo) - siehe Kapitel 4.
+  2. Unter "Adressbuch" -> "CSV importieren" eine vorhandene Kundenliste
+     einlesen, falls vorhanden - siehe Kapitel 5.
+  3. Optional unter "Artikel" haeufig verwendete Artikel/Leistungen mit
+     Preis und MwSt-Satz anlegen, damit sie spaeter beim Rechnungschreiben
+     automatisch vorausgefuellt werden - siehe Kapitel 6.
+  4. Los geht's mit der ersten Rechnung unter "Rechnungen" - Kapitel 7.
+
+
+================================================================================
+ 3. UEBERSICHT (DASHBOARD)
+================================================================================
+
+  Die Startseite zeigt auf einen Blick:
+    - Anzahl der Absenderprofile
+    - Anzahl der Kunden im Adressbuch
+    - Anzahl aller Rechnungen
+    - Liste der zuletzt erstellten Rechnungen mit Status
+
+
+================================================================================
+ 4. ABSENDERPROFILE
+================================================================================
+
+  Ein Profil buendelt alle Absenderdaten fuer eine "Firma"/einen
+  Geschaeftsbereich, unter dem Rechnungen ausgestellt werden.
+
+  Neues Profil anlegen:
+    "Absenderprofile" -> "+ Neues Profil", folgende Angaben moeglich:
+      - Profilname, Name im Briefkopf
+      - Logo (Bilddatei auswaehlen, erscheint oben rechts auf dem PDF)
+      - Adresse, Telefon, E-Mail
+      - Bankverbindung (IBAN, BIC, Bankname)
+      - Steuernummer, USt-IdNr.
+      - Rechnungsnummer-Praefix und naechste laufende Nummer
+
+  Es koennen beliebig viele Profile angelegt werden - jedes hat eine
+  eigene, getrennt fortlaufende Rechnungsnummer sowie eigene Nummernkreise
+  fuer Angebote, Lieferscheine usw.
+
+  MwSt-Saetze je Profil:
+    Beim Bearbeiten eines bestehenden Profils erscheint unten der Bereich
+    "MwSt-Saetze dieses Profils". Standardmaessig sind 7 %, 7,8 %
+    (Pauschalierung Land-/Forstwirtschaft) und 19 % angelegt. Eigene
+    Saetze koennen ergaenzt oder geloescht werden. Geloeschte Saetze
+    wirken sich NICHT auf bereits erstellte Rechnungen/Belege aus.
+
+  Ein Profil kann nur geloescht werden, wenn noch keine Rechnungen damit
+  erstellt wurden.
+
+
+================================================================================
+ 5. ADRESSBUCH
+================================================================================
+
+  Das Adressbuch ist profiluebergreifend - alle Absenderprofile greifen
+  auf denselben Kundenstamm zu.
+
+  Kunde anlegen: "Adressbuch" -> "+ Neuer Kunde". Die Kundennummer
+  (Format K1, K2, ...) wird automatisch vergeben, kann aber auch manuell
+  gesetzt werden.
+
+  PLZ-Automatik: Sobald eine PLZ eingegeben wurde, die bereits bei einem
+  anderen Kunden verwendet wurde, wird der zugehoerige Ort automatisch
+  vorgeschlagen.
+
+  CSV-Import: "CSV importieren" liest eine Kundenliste aus einer
+  CSV-Datei ein (Spalten: Nachname/Firma, Vorname/Ansprechpartner,
+  Anrede, Strasse, PLZ, Ort, Telefon/Email/Sonstiges, Datum_angelegt).
+  Die Zeichenkodierung wird automatisch erkannt (UTF-8 oder
+  Windows-1252), damit Umlaute nicht beschaedigt werden.
+
+  Ein Kunde kann nur geloescht werden, wenn noch keine Rechnungen fuer
+  ihn erstellt wurden.
+
+
+================================================================================
+ 6. ARTIKEL-STAMMDATEN
+================================================================================
+
+  Unter "Artikel" lassen sich haeufig verkaufte Artikel/Leistungen mit
+  Artikel-Nummer, Bezeichnung, Verkaufspreis (netto), MwSt-Satz sowie
+  optional Einkaufspreis, Warenbestand und Mindestmenge hinterlegen.
+
+  Automatische Uebernahme: Wird beim Erstellen einer Rechnung oder eines
+  Belegs in einer Position eine bekannte Artikel-Nummer eingetragen und
+  das Feld verlassen, werden Bezeichnung, Preis und MwSt-Satz automatisch
+  aus dem Artikel-Stamm uebernommen.
+
+  Liegt der Warenbestand auf oder unter der Mindestmenge, wird das in der
+  Artikelliste mit dem Hinweis "niedrig" markiert.
+
+
+================================================================================
+ 7. RECHNUNGEN
+================================================================================
+
+  Neue Rechnung: "Rechnungen" -> "+ Neue Rechnung"
+    - Absenderprofil und Kunde auswaehlen
+    - Rechnungsdatum
+    - Beliebig viele Positionen (Artikel-Nr., Bezeichnung, Menge,
+      Einzelpreis netto, MwSt-Satz) - die Zeilen- und Gesamtsumme werden
+      live berechnet und je verwendetem MwSt-Satz getrennt ausgewiesen
+    - Extrafeld fuer individuelle Zusatzinformation (Kapitel 12)
+    - Textbausteine per Haken auswaehlen, zusaetzlich freier Text
+      moeglich (Kapitel 12)
+
+  Die Rechnungsnummer (Format R[JJ]-[laufende Nummer], z. B. R26-0091)
+  wird beim Erstellen automatisch vergeben und laeuft je Profil getrennt
+  fortlaufend weiter.
+
+  Zu jeder Rechnung in der Liste stehen folgende Aktionen zur Verfuegung:
+    - Vorschau        (PDF vorab ansehen, Kapitel 13)
+    - Drucken          (direkter Ausdruck ueber den Windows-Druckdialog)
+    - PDF exportieren  (als Datei speichern)
+    - Per E-Mail senden (Kapitel 13)
+
+  Bezahlt-Status: In der Spalte "Bezahlt" kann eine Rechnung als bezahlt
+  markiert werden (mit Datum und erhaltenem Betrag, z. B. bei
+  Skontoabzug abweichend vom Rechnungsbetrag). Ueber den Reiter
+  "Offene Posten" erscheinen alle noch unbezahlten Rechnungen mit dem
+  jeweils offenen Betrag.
+
+
+================================================================================
+ 8. WEITERE BELEGARTEN
+================================================================================
+
+  Unter "Angebot/Lieferschein/AB" befinden sich mehrere Reiter fuer
+  zusaetzliche Belegarten, jede mit eigenem, getrennt fortlaufendem
+  Nummernkreis je Profil:
+
+    - Angebot                (Positionen mit Preisen)
+    - Auftragsbestaetigung   (Positionen mit Preisen)
+    - Lieferschein           (Positionen OHNE Preise/Summen)
+    - Korrektur-Rechnung     (Positionen mit Preisen, optional mit Bezug
+                              zu einer bestehenden Rechnung)
+    - Barbeleg               (Kassenbeleg/Quittung fuer Barzahlungen,
+                              PDF enthaelt automatisch den Vermerk
+                              "Betrag dankend in bar erhalten.")
+
+  Die Erstellung funktioniert analog zur Rechnung (Kapitel 7), inklusive
+  Extrafeld, Textbausteinen, Vorschau/Drucken/PDF-Export/E-Mail-Versand.
+
+
+================================================================================
+ 9. MAHNUNGEN
+================================================================================
+
+  Unter "Mahnungen" -> "+ Neue Mahnung" wird eine offene (unbezahlte)
+  Rechnung ausgewaehlt. Der offene Betrag wird automatisch aus der
+  Rechnung uebernommen und auf dem PDF ausgewiesen. Der Mahntext ist
+  frei editierbar (ein Standardtext ist vorausgefuellt).
+
+  Auch hier stehen Vorschau, Drucken, PDF-Export und E-Mail-Versand zur
+  Verfuegung.
+
+
+================================================================================
+10. NOTIZEN
+================================================================================
+
+  Freie Merkzettel mit:
+    - Prioritaet (1 = hoechste)
+    - Faellig-bis-Datum (optional)
+    - optionaler Zuordnung zu einem Kunden
+    - Erledigt-Haken
+
+  Die Liste ist automatisch nach Prioritaet und Faelligkeit sortiert,
+  erledigte Eintraege werden abgeblendet dargestellt.
+
+
+================================================================================
+11. EINSTELLUNGEN
+================================================================================
+
+  Datensicherung:
+    "Backup jetzt erstellen" legt eine vollstaendige, in sich
+    konsistente Kopie der gesamten Datenbank (Kunden, Rechnungen,
+    Belege, Artikel, Notizen, ...) an einem frei waehlbaren Ort ab.
+    Regelmaessige Backups (z. B. auf einen USB-Stick oder ein
+    Netzlaufwerk) werden empfohlen.
+
+  Passwortschutz:
+    Optional aktivierbar. Ist ein Passwort gesetzt, muss es bei jedem
+    Programmstart eingegeben werden, bevor die Oberflaeche sichtbar
+    wird. Passwort kann jederzeit geaendert oder wieder entfernt werden
+    (dafuer wird das aktuelle Passwort zur Bestaetigung benoetigt).
+
+  Versionsanzeige:
+    Ganz unten auf der Seite erscheint die aktuell installierte
+    Versionsnummer sowie "Entwickelt von Alexander Poesl".
+
+
+================================================================================
+12. TEXTBAUSTEINE UND EXTRAFELD
+================================================================================
+
+  Textbausteine:
+    Vorformulierte Textblöcke (z. B. Geschaeftsbedingungen), die unter
+    der Summenzeile auf dem PDF erscheinen. Beim Erstellen einer
+    Rechnung/eines Belegs koennen mehrere Textbausteine gleichzeitig per
+    Haken ausgewaehlt werden. Zusaetzlich kann ein frei eingetippter Text
+    ergaenzt werden, der ebenfalls mit abgedruckt wird.
+
+  Extrafeld:
+    Ein einzelnes freies Textfeld pro Rechnung/Beleg fuer individuelle
+    Zusatzinformationen (z. B. einen Lieferhinweis), die direkt auf dem
+    Dokument erscheinen sollen.
+
+
+================================================================================
+13. PDF-VORSCHAU, DRUCKEN, E-MAIL-VERSAND
+================================================================================
+
+  Vorschau:
+    Oeffnet die fertige PDF in einem eigenen Fenster, bevor sie
+    gespeichert wird. Von dort aus kann sie ueber die eingebauten
+    Symbole der Vorschau ebenfalls gespeichert oder gedruckt werden.
+
+  Drucken:
+    Oeffnet direkt den Windows-Druckdialog mit der erzeugten PDF - ohne
+    Umweg ueber ein externes PDF-Programm.
+
+  Per E-Mail senden:
+    Erzeugt die PDF, zeigt sie im Explorer an (zum manuellen Anhaengen
+    per Drag & Drop) und oeffnet gleichzeitig das Standard-Mailprogramm
+    mit vorausgefuelltem Betreff und Anschreiben. Ist beim Kunden eine
+    E-Mail-Adresse hinterlegt, wird sie automatisch als Empfaenger
+    eingetragen.
+    Hinweis: E-Mail-Programme koennen technisch bedingt keine Anhaenge
+    automatisch per Link setzen - das Anhaengen der bereits geoeffneten
+    PDF-Datei ist deshalb ein letzter manueller Schritt.
+
+
+================================================================================
+14. AUTOMATISCHE UPDATES
+================================================================================
+
+  Die App prueft beim Start automatisch, ob eine neuere Version
+  verfuegbar ist, laedt sie bei Bedarf im Hintergrund herunter und
+  fragt anschliessend per Dialog, ob jetzt neu gestartet werden soll,
+  um die neue Version zu uebernehmen. Ein manueller Download/Installer
+  ist dafuer nicht noetig.
+
+
+================================================================================
+15. DATEN, SPEICHERORT UND SICHERUNG
+================================================================================
+
+  Alle Daten (Datenbank, hochgeladene Logos) liegen ausserhalb des
+  Installationsordners im Benutzerprofil unter:
+
+      %APPDATA%\rechnung-adressbuch\
+
+  Diese Daten bleiben bei einer Neuinstallation, einem Update oder auch
+  einer Deinstallation der App automatisch erhalten.
+
+  Trotzdem empfiehlt sich ein regelmaessiges manuelles Backup ueber
+  "Einstellungen -> Backup jetzt erstellen" (Kapitel 11), zusaetzlich
+  z. B. auf einem externen Speichermedium abgelegt, falls der PC
+  ausfaellt.
+
+
+================================================================================
+16. HAEUFIGE FRAGEN / TIPPS
+================================================================================
+
+  F: Kann ich mehrere Firmen/Betriebe in einer App verwalten?
+  A: Ja, ueber beliebig viele Absenderprofile (Kapitel 4). Das
+     Adressbuch ist dabei gemeinsam fuer alle Profile nutzbar.
+
+  F: Was passiert, wenn ich einen MwSt-Satz loesche, der schon in
+     Rechnungen verwendet wurde?
+  A: Nichts - bereits erstellte Rechnungen/Belege behalten den damals
+     verwendeten Satz unveraendert. Der Satz steht nur fuer NEUE
+     Dokumente nicht mehr zur Auswahl.
+
+  F: Ich habe mein Passwort vergessen - was nun?
+  A: Ohne das Passwort ist der Zugriff ueber die Oberflaeche nicht
+     moeglich. In diesem Fall bitte an die Person wenden, die die App
+     eingerichtet hat.
+
+  F: Wo finde ich alte, bereits erstellte PDFs wieder?
+  A: PDFs werden nur beim Export/Druck/E-Mail-Versand erzeugt und dort
+     gespeichert, wo Sie sie abgelegt haben - die App speichert keine
+     eigene Kopie der PDF-Dateien selbst, sondern erzeugt sie bei Bedarf
+     jederzeit neu aus den gespeicherten Daten.
+
+================================================================================
+                              Ende der Anleitung
+================================================================================
