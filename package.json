@@ -1,6 +1,6 @@
 {
   "name": "rechnung-adressbuch",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Rechnungs- und Adressbuch-Desktopanwendung mit mehreren Absenderprofilen",
   "main": "src/main/main.js",
   "author": "Alexander Pösl",
@@ -10,6 +10,7 @@
     "start": "electron .",
     "prep:win-native": "node scripts/fetch-win-native.js",
     "dist": "npm run prep:win-native && electron-builder --win",
+    "dist:mac": "electron-builder --mac",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -55,7 +56,18 @@
       "icon": "assets/icons/icon.png"
     },
     "mac": {
-      "icon": "assets/icons/icon.png"
+      "icon": "assets/icons/icon.png",
+      "category": "public.app-category.business",
+      "target": [
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        },
+        {
+          "target": "dmg",
+          "arch": ["x64"]
+        }
+      ]
     },
     "linux": {
       "icon": "assets/icons/icon.png"

@@ -20,7 +20,7 @@ const { execFileSync } = require('child_process');
 module.exports = async function afterPack(context) {
     const projectRoot = path.join(__dirname, '..');
     const quelle = path.join(projectRoot, 'node_modules');
-    const ziel = path.join(context.appOutDir, 'resources', 'app', 'node_modules');
+    const ziel = ermittleAppNodeModulesVerzeichnis(context);
 
     if (!fs.existsSync(quelle) || !fs.existsSync(ziel)) return;
 
@@ -73,6 +73,21 @@ module.exports = async function afterPack(context) {
         console.log('afterPack: better_sqlite3.node durch echtes Windows-x64-Prebuilt ersetzt.');
     }
 };
+
+// Auf macOS liegt das node_modules-Verzeichnis der App verschachtelt im
+// .app-Bundle ("<Produktname>.app/Contents/Resources/app/node_modules"),
+// nicht flach wie bei Windows/Linux ("resources/app/node_modules"). Ohne
+// diese Fallunterscheidung fand der obige Nachkopier-Fix auf dem Mac schlicht
+// kein Zielverzeichnis und griff dadurch gar nicht - Folge: fehlende
+// production dependencies (z.B. "call-bind-apply-helpers") führten beim
+// Start der gepackten Mac-App zu "Cannot find module ...".
+function ermittleAppNodeModulesVerzeichnis(context) {
+    if (context.electronPlatformName === 'darwin') {
+        const productFilename = context.packager.appInfo.productFilename;
+        return path.join(context.appOutDir, `${productFilename}.app`, 'Contents', 'Resources', 'app', 'node_modules');
+    }
+    return path.join(context.appOutDir, 'resources', 'app', 'node_modules');
+}
 
 // Liefert alle production-dependency-Verzeichnisse relativ zu node_modules/,
 // inklusive verschachtelter Kopien (z.B. "call-bind/node_modules/call-bind-apply-helpers").
