@@ -46,6 +46,7 @@ function runMigrations() {
     addSpalteFallsFehlt('invoices', 'bezahlt_betrag', 'REAL');
     addSpalteFallsFehlt('invoices', 'extra_text', 'TEXT');
     addSpalteFallsFehlt('invoices', 'freier_text', 'TEXT');
+    addSpalteFallsFehlt('invoices', 'leistungsdatum', 'TEXT');
     addSpalteFallsFehlt('belege', 'extra_text', 'TEXT');
     addSpalteFallsFehlt('belege', 'freier_text', 'TEXT');
 }

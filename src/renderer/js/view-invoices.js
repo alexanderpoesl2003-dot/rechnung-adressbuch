@@ -50,6 +50,7 @@ async function renderInvoices(container) {
                         <button class="btn btn-klein" data-drucken="${r.id}">Drucken</button>
                         <button class="btn btn-klein" data-pdf="${r.id}">PDF exportieren</button>
                         <button class="btn btn-klein" data-email="${r.id}">Per E-Mail senden</button>
+                        <button class="btn btn-klein" data-bearbeiten="${r.id}">Bearbeiten</button>
                         <button class="btn btn-klein" data-duplizieren="${r.id}">Duplizieren</button>
                         <button class="btn btn-klein btn-gefahr" data-delete="${r.id}">Löschen</button>
                     </div>
@@ -116,6 +117,17 @@ async function renderInvoices(container) {
         });
     });
 
+    tbody.querySelectorAll('[data-bearbeiten]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            try {
+                const rechnung = await window.api.invoices.get(Number(btn.dataset.bearbeiten));
+                zeigeRechnungFormular(container, rechnung, rechnung.id);
+            } catch (err) {
+                showFehler(err.message);
+            }
+        });
+    });
+
     tbody.querySelectorAll('[data-toggle-bezahlt]').forEach((btn) => {
         btn.addEventListener('click', async () => {
             const id = Number(btn.dataset.toggleBezahlt);
@@ -159,7 +171,10 @@ async function renderInvoices(container) {
 // vorlage ist optional: eine bestehende Rechnung (aus invoices.get()), von der
 // Profil/Kunde/Positionen/Texte übernommen werden ("Rechnung duplizieren").
 // Datum und Rechnungsnummer werden dabei immer neu vergeben.
-async function zeigeRechnungFormular(container, vorlage) {
+// bearbeitenId ist optional: die id einer bestehenden Rechnung, die damit statt
+// dupliziert tatsächlich bearbeitet (überschrieben) wird - dann bleiben
+// Rechnungsdatum, Leistungsdatum und Rechnungsnummer aus der Vorlage erhalten.
+async function zeigeRechnungFormular(container, vorlage, bearbeitenId) {
     const bereich = container.querySelector('#rechnung-formular-bereich');
     const [profiles, customers, textBausteine] = await Promise.all([
         window.api.profiles.list(),
@@ -167,14 +182,17 @@ async function zeigeRechnungFormular(container, vorlage) {
         window.api.invoices.listTextBausteine()
     ]);
 
+    const istBearbeiten = Boolean(bearbeitenId);
     const vorbelegtesProfil = vorlage ? vorlage.sender_profile_id : null;
     const vorbelegterKunde = vorlage ? vorlage.customer_id : null;
     const ausgewaehlteTextbausteine = new Set(((vorlage && vorlage.textBausteine) || []).map((t) => t.schluessel));
+    const rechnungsdatumWert = istBearbeiten && vorlage ? vorlage.rechnungsdatum : heute();
+    const leistungsdatumWert = istBearbeiten && vorlage ? (vorlage.leistungsdatum || vorlage.rechnungsdatum) : heute();
 
     bereich.innerHTML = '';
     bereich.appendChild(el(`
         <form class="formular" id="rechnung-formular">
-            <h2>${vorlage ? 'Rechnung duplizieren' : 'Neue Rechnung'}</h2>
+            <h2>${istBearbeiten ? 'Rechnung bearbeiten' : (vorlage ? 'Rechnung duplizieren' : 'Neue Rechnung')}</h2>
             <div class="formular-raster">
                 <label>Absenderprofil
                     <select name="sender_profile_id" required>
@@ -186,9 +204,12 @@ async function zeigeRechnungFormular(container, vorlage) {
                         ${customers.map((k) => `<option value="${k.id}" ${k.id === vorbelegterKunde ? 'selected' : ''}>${escapeHtml(k.kundennummer)} – ${escapeHtml(k.nachname_firma)}</option>`).join('')}
                     </select>
                 </label>
-                <label>Rechnungsdatum <input type="date" name="rechnungsdatum" value="${heute()}" required /></label>
-                <label>Rechnungsnummer (optional – leer lassen für automatische Vergabe)
-                    <input type="text" name="rechnungsnummer" placeholder="wird automatisch vergeben" />
+                <label>Rechnungsdatum <input type="date" name="rechnungsdatum" value="${rechnungsdatumWert}" required /></label>
+                <label>Leistungsdatum (Datum der Lieferung/Leistung, ggf. abweichend vom Rechnungsdatum)
+                    <input type="date" name="leistungsdatum" value="${leistungsdatumWert}" required />
+                </label>
+                <label>Rechnungsnummer ${istBearbeiten ? '' : '(optional – leer lassen für automatische Vergabe)'}
+                    <input type="text" name="rechnungsnummer" value="${istBearbeiten && vorlage ? escapeHtml(vorlage.rechnungsnummer) : ''}" placeholder="${istBearbeiten ? '' : 'wird automatisch vergeben'}" />
                 </label>
             </div>
 
@@ -216,7 +237,7 @@ async function zeigeRechnungFormular(container, vorlage) {
             </label>
 
             <div class="formular-aktionen">
-                <button type="submit" class="btn btn-primary">Rechnung erstellen</button>
+                <button type="submit" class="btn btn-primary">${istBearbeiten ? 'Änderungen speichern' : 'Rechnung erstellen'}</button>
                 <button type="button" class="btn" id="btn-abbrechen">Abbrechen</button>
             </div>
         </form>
@@ -298,6 +319,7 @@ async function zeigeRechnungFormular(container, vorlage) {
             sender_profile_id: Number(form.sender_profile_id.value),
             customer_id: Number(form.customer_id.value),
             rechnungsdatum: form.rechnungsdatum.value,
+            leistungsdatum: form.leistungsdatum.value || null,
             rechnungsnummer: form.rechnungsnummer.value || null,
             extra_text: form.extra_text.value || null,
             freier_text: form.freier_text.value || null,
@@ -306,7 +328,11 @@ async function zeigeRechnungFormular(container, vorlage) {
         };
 
         try {
-            await window.api.invoices.create(data);
+            if (istBearbeiten) {
+                await window.api.invoices.update(bearbeitenId, data);
+            } else {
+                await window.api.invoices.create(data);
+            }
             renderInvoices(container);
         } catch (err) {
             showFehler(err.message);

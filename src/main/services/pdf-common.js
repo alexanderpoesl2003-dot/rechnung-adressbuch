@@ -45,7 +45,7 @@ function drawBriefkopf(doc, profile) {
 }
 
 function drawAnschriften(doc, profile, customer) {
-    const y = 150;
+    const y = 140;
     doc
         .fontSize(8)
         .font('Helvetica')
@@ -77,13 +77,13 @@ function drawAnschriften(doc, profile, customer) {
 // Zeichnet Titel (z.B. "Rechnung", "Angebot") und darunter beliebige
 // Label/Wert-Zeilen (z.B. Belegnummer, Datum, Kundennummer).
 function drawBelegkopf(doc, titel, zeilen) {
-    const y = 260;
+    const y = 245;
     doc.fontSize(16).font('Helvetica-Bold').text(titel, PAGE_MARGIN, y);
     doc.fontSize(10).font('Helvetica');
     zeilen.forEach(([label, wert], index) => {
-        doc.text(`${label}: ${wert}`, PAGE_MARGIN, y + 25 + index * 15);
+        doc.text(`${label}: ${wert}`, PAGE_MARGIN, y + 22 + index * 13);
     });
-    doc.y = y + 25 + zeilen.length * 15 + 15;
+    doc.y = y + 22 + zeilen.length * 13 + 12;
 }
 
 const COLS = {
@@ -123,11 +123,11 @@ function drawPositionstabelle(doc, positionen, zeigtPreise = true) {
             doc.text(`${formatSatz(pos.mwst_satz)}%`, COLS.mwst.x, y, { width: COLS.mwst.width, align: 'right' });
             doc.text(formatEur(zeilenGesamt), COLS.gesamt.x, y, { width: COLS.gesamt.width, align: 'right' });
         }
-        y += 18;
+        y += 15;
     }
 
     doc.moveTo(PAGE_MARGIN, y).lineTo(PAGE_MARGIN + 455, y).strokeColor('#999').stroke();
-    doc.y = y + 10;
+    doc.y = y + 8;
 }
 
 // summen.aufteilung: [{ satz, netto, mwstBetrag }, ...] - beliebig viele,
@@ -146,13 +146,13 @@ function drawSummenzeile(doc, summen) {
     for (const [label, value] of zeilen) {
         doc.text(label, labelX, y, { width: 110 });
         doc.text(formatEur(value), valueX, y, { width: COLS.gesamt.width, align: 'right' });
-        y += 15;
+        y += 13;
     }
 
     doc.font('Helvetica-Bold');
     doc.text('Gesamtbetrag', labelX, y, { width: 110 });
     doc.text(formatEur(summen.brutto), valueX, y, { width: COLS.gesamt.width, align: 'right' });
-    y += 25;
+    y += 20;
 
     doc.y = y;
 }
@@ -168,14 +168,14 @@ function drawTextbausteine(doc, textBausteine, freierText) {
         doc
             .font('Helvetica')
             .fontSize(8)
-            .text(textBaustein.inhalt, PAGE_MARGIN, doc.y + 3, { width: 455 });
-        doc.moveDown(1);
+            .text(textBaustein.inhalt, PAGE_MARGIN, doc.y + 2, { width: 455 });
+        doc.moveDown(0.6);
     }
 
     if (freierText) {
         doc.font('Helvetica-Bold').fontSize(9).text('Weitere Anmerkung', PAGE_MARGIN, doc.y);
-        doc.font('Helvetica').fontSize(8).text(freierText, PAGE_MARGIN, doc.y + 3, { width: 455 });
-        doc.moveDown(1);
+        doc.font('Helvetica').fontSize(8).text(freierText, PAGE_MARGIN, doc.y + 2, { width: 455 });
+        doc.moveDown(0.6);
     }
 }
 
@@ -183,11 +183,10 @@ function drawTextbausteine(doc, textBausteine, freierText) {
 function drawExtraText(doc, extraText) {
     if (!extraText) return;
     doc.font('Helvetica').fontSize(8).text(extraText, PAGE_MARGIN, doc.y, { width: 455 });
-    doc.moveDown(1);
+    doc.moveDown(0.6);
 }
 
 function drawFusszeile(doc, profile) {
-    const y = 760;
     const zeilen = [
         [profile.telefon && `Tel: ${profile.telefon}`, profile.email && `E-Mail: ${profile.email}`]
             .filter(Boolean)
@@ -202,9 +201,18 @@ function drawFusszeile(doc, profile) {
         profile.steuernummer && `Steuernummer: ${profile.steuernummer}`,
         profile.ust_id && `USt-IdNr.: ${profile.ust_id}`
     ].filter(Boolean);
+    if (zeilen.length === 0) return;
+    const text = zeilen.join('\n');
 
     doc.fontSize(7).font('Helvetica').fillColor('#555');
-    doc.text(zeilen.join('\n'), PAGE_MARGIN, y, { width: 495, align: 'center' });
+    // Fußzeile immer bündig über dem unteren Seitenrand platzieren (statt einer
+    // fixen y-Position), damit sie unabhängig von der Anzahl gefüllter Zeilen
+    // zuverlässig auf der aktuellen Seite bleibt und nicht knapp über den
+    // unteren Rand hinausragt (was pdfkit sonst mit einem automatischen
+    // Seitenumbruch quittiert).
+    const hoehe = doc.heightOfString(text, { width: 495, align: 'center' });
+    const y = doc.page.height - PAGE_MARGIN - hoehe;
+    doc.text(text, PAGE_MARGIN, y, { width: 495, align: 'center' });
     doc.fillColor('#000');
 }
 

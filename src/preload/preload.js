@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('api', {
         list: () => invoke('invoices:list'),
         get: (id) => invoke('invoices:get', id),
         create: (data) => invoke('invoices:create', data),
+        update: (id, data) => invoke('invoices:update', id, data),
         updateStatus: (id, status) => invoke('invoices:updateStatus', id, status),
         remove: (id) => invoke('invoices:remove', id),
         listTextBausteine: () => invoke('invoices:listTextBausteine'),

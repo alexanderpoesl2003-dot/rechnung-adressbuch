@@ -195,11 +195,11 @@ h3 { font-size: 14px; margin: 20px 0 8px; color: #4b5563; }
 }
 .summe-gesamt { font-weight: 700; font-size: 15px; }
 
-#positionen-tabelle th:nth-child(1), #positionen-tabelle td:nth-child(1) { width: 9%; }
-#positionen-tabelle th:nth-child(2), #positionen-tabelle td:nth-child(2) { width: 25%; }
-#positionen-tabelle th:nth-child(3), #positionen-tabelle td:nth-child(3) { width: 9%; }
+#positionen-tabelle th:nth-child(1), #positionen-tabelle td:nth-child(1) { width: 7%; }
+#positionen-tabelle th:nth-child(2), #positionen-tabelle td:nth-child(2) { width: 21%; }
+#positionen-tabelle th:nth-child(3), #positionen-tabelle td:nth-child(3) { width: 17%; }
 #positionen-tabelle th:nth-child(4), #positionen-tabelle td:nth-child(4) { width: 12%; }
-#positionen-tabelle th:nth-child(5), #positionen-tabelle td:nth-child(5) { width: 19%; }
+#positionen-tabelle th:nth-child(5), #positionen-tabelle td:nth-child(5) { width: 17%; }
 #positionen-tabelle th:nth-child(6), #positionen-tabelle td:nth-child(6) { width: 14%; }
 #positionen-tabelle th:nth-child(7), #positionen-tabelle td:nth-child(7) { width: 36px; text-align: center; }
 #positionen-tabelle select,

@@ -103,9 +103,9 @@ function create(data) {
 
         const insertInvoice = db.prepare(`
             INSERT INTO invoices
-                (sender_profile_id, customer_id, rechnungsnummer, rechnungsdatum,
+                (sender_profile_id, customer_id, rechnungsnummer, rechnungsdatum, leistungsdatum,
                  status, extra_text, freier_text)
-            VALUES (@sender_profile_id, @customer_id, @rechnungsnummer, @rechnungsdatum,
+            VALUES (@sender_profile_id, @customer_id, @rechnungsnummer, @rechnungsdatum, @leistungsdatum,
                     @status, @extra_text, @freier_text)
         `);
         const info = insertInvoice.run({
@@ -113,6 +113,7 @@ function create(data) {
             customer_id: data.customer_id,
             rechnungsnummer,
             rechnungsdatum: data.rechnungsdatum,
+            leistungsdatum: data.leistungsdatum || null,
             status: data.status || 'entwurf',
             extra_text: data.extra_text || null,
             freier_text: data.freier_text || null
@@ -152,6 +153,79 @@ function create(data) {
         throw err;
     }
     return get(invoiceId);
+}
+
+// Aktualisiert eine bestehende Rechnung vollständig (Stammdaten, Positionen,
+// Textbausteine) - im Gegensatz zu create() wird dabei keine neue
+// Rechnungsnummer reserviert, sondern die bestehende beibehalten, sofern
+// keine andere explizit angegeben wird.
+function update(id, data) {
+    const db = getDb();
+    const bestehende = get(id);
+    if (!bestehende) throw new Error('Rechnung nicht gefunden.');
+
+    const positionen = data.positionen || [];
+    if (positionen.length === 0) {
+        throw new Error('Eine Rechnung benötigt mindestens eine Position.');
+    }
+
+    const rechnungsnummer = data.rechnungsnummer && data.rechnungsnummer.trim()
+        ? data.rechnungsnummer.trim()
+        : bestehende.rechnungsnummer;
+
+    const transaction = db.transaction(() => {
+        db.prepare(`
+            UPDATE invoices SET
+                sender_profile_id = @sender_profile_id,
+                customer_id = @customer_id,
+                rechnungsnummer = @rechnungsnummer,
+                rechnungsdatum = @rechnungsdatum,
+                leistungsdatum = @leistungsdatum,
+                extra_text = @extra_text,
+                freier_text = @freier_text
+            WHERE id = @id
+        `).run({
+            id,
+            sender_profile_id: data.sender_profile_id,
+            customer_id: data.customer_id,
+            rechnungsnummer,
+            rechnungsdatum: data.rechnungsdatum,
+            leistungsdatum: data.leistungsdatum || null,
+            extra_text: data.extra_text || null,
+            freier_text: data.freier_text || null
+        });
+
+        db.prepare('DELETE FROM invoice_positions WHERE invoice_id = ?').run(id);
+        const insertPosition = db.prepare(`
+            INSERT INTO invoice_positions
+                (invoice_id, position, artikel_nr, bezeichnung, menge, einzelpreis_netto, mwst_satz)
+            VALUES (@invoice_id, @position, @artikel_nr, @bezeichnung, @menge, @einzelpreis_netto, @mwst_satz)
+        `);
+        positionen.forEach((pos, index) => {
+            insertPosition.run({
+                invoice_id: id,
+                position: index + 1,
+                artikel_nr: pos.artikel_nr || null,
+                bezeichnung: pos.bezeichnung,
+                menge: Number(pos.menge) || 0,
+                einzelpreis_netto: Number(pos.einzelpreis_netto) || 0,
+                mwst_satz: Number(pos.mwst_satz) || 19
+            });
+        });
+
+        setTextBausteine(id, data.textBausteineSchluessel);
+    });
+
+    try {
+        transaction();
+    } catch (err) {
+        const istUniqueFehler = err.code === 'SQLITE_CONSTRAINT_UNIQUE' || /UNIQUE constraint failed/.test(err.message);
+        if (istUniqueFehler) {
+            throw new Error(`Die Rechnungsnummer "${rechnungsnummer}" wird bereits verwendet. Bitte eine andere Nummer wählen.`);
+        }
+        throw err;
+    }
+    return get(id);
 }
 
 function updateStatus(id, status) {
@@ -293,6 +367,7 @@ module.exports = {
     list,
     get,
     create,
+    update,
     updateStatus,
     remove,
     calculateTotals,

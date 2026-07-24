@@ -42,6 +42,7 @@ function renderInvoicePdf(invoiceId, outputPath) {
         drawBelegkopf(doc, 'Rechnung', [
             ['Rechnungsnummer', invoice.rechnungsnummer],
             ['Rechnungsdatum', formatDatum(invoice.rechnungsdatum)],
+            ['Leistungsdatum', formatDatum(invoice.leistungsdatum || invoice.rechnungsdatum)],
             ['Kundennummer', customer.kundennummer]
         ]);
         drawPositionstabelle(doc, invoice.positionen);

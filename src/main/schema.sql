@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     customer_id               INTEGER NOT NULL REFERENCES customers(id),
     rechnungsnummer           TEXT NOT NULL UNIQUE,
     rechnungsdatum            TEXT NOT NULL,
+    leistungsdatum            TEXT,
     text_baustein_schluessel  TEXT REFERENCES text_bausteine(schluessel),
     status                    TEXT NOT NULL DEFAULT 'entwurf',
     erstellt_am               TEXT NOT NULL DEFAULT (datetime('now'))
