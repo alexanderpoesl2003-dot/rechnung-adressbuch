@@ -20,6 +20,7 @@ const { renderBelegPdf } = require('../services/beleg-pdf');
 const { renderMahnungPdf } = require('../services/mahnung-pdf');
 const { extractEmail, buildMailto } = require('../services/email');
 const rechnungVersand = require('../services/rechnung-versand');
+const lizenz = require('../services/lizenz');
 const { oeffneVorschauFenster, druckePdf } = require('../pdf-fenster');
 const { getLogosDir } = require('../db');
 const { checkForUpdatesManuell } = require('../updater');
@@ -308,6 +309,11 @@ function registerIpcHandlers() {
         shell.showItemInFolder(result.filePath);
         return { pfad: result.filePath };
     });
+
+    // Produktschlüssel/Testzeitraum (siehe Auftrag "Produktschlüssel für
+    // Weitergabe")
+    handle('lizenz:status', () => lizenz.lizenzstatus());
+    handle('lizenz:einloesen', (schluessel) => lizenz.schluesselEinloesen(schluessel));
 
     // Passwortschutz
     handle('settings:isPasswordSet', () => settings.isPasswordSet());

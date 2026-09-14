@@ -16,3 +16,10 @@ Kundendaten_extrahiert.csv
 # Fremdes, urheberrechtlich geschütztes Handbuch (RS-Office Pro, RSP Software
 # GmbH) - keine eigene Projektdatei, Weitergabe laut Lizenz untersagt
 Handbuch.pdf
+
+# Geheimnis für die Produktschlüssel-Prüfung (siehe src/main/services/lizenz.js) -
+# NIEMALS committen, sonst könnte jeder mit Repo-Zugriff eigene gültige
+# Schlüssel erzeugen. Wird beim Bauen der App (electron-builder) trotzdem mit
+# in die Installationsdateien gepackt (siehe package.json: build.extraResources) -
+# landet also in der fertigen App, aber nicht im Git-Verlauf.
+lizenz-geheimnis.local.json

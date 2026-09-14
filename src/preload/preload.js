@@ -83,6 +83,10 @@ contextBridge.exposeInMainWorld('api', {
         update: (schluessel, data) => invoke('textBausteine:update', schluessel, data),
         remove: (schluessel) => invoke('textBausteine:remove', schluessel)
     },
+    lizenz: {
+        status: () => invoke('lizenz:status'),
+        einloesen: (schluessel) => invoke('lizenz:einloesen', schluessel)
+    },
     settings: {
         isPasswordSet: () => invoke('settings:isPasswordSet'),
         setPassword: (passwort) => invoke('settings:setPassword', passwort),

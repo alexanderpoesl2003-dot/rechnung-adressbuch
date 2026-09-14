@@ -54,6 +54,7 @@ function initialisiereGlobaleSuche() {
 window.addEventListener('hashchange', router);
 window.addEventListener('DOMContentLoaded', async () => {
     initialisiereGlobaleSuche();
+    await pruefeLizenzGate();
     await pruefeLoginGate();
     if (!window.location.hash) window.location.hash = '#/dashboard';
     router();
