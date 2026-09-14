@@ -1,6 +1,6 @@
 {
   "name": "rechnung-adressbuch",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Rechnungs- und Adressbuch-Desktopanwendung mit mehreren Absenderprofilen",
   "main": "src/main/main.js",
   "author": "Alexander Pösl",
@@ -78,8 +78,7 @@
       "icon": "assets/icons/icon.png"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "deleteAppDataOnUninstall": false
