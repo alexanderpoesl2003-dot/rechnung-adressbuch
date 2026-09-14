@@ -33,8 +33,7 @@
       "src/**/*",
       "assets/**/*",
       "package.json",
-      "node_modules/**/*",
-      "lizenz-geheimnis.local.json"
+      "node_modules/**/*"
     ],
     "directories": {
       "output": "dist"
@@ -55,7 +54,9 @@
           ]
         }
       ],
-      "icon": "assets/icons/icon.png"
+      "icon": "assets/icons/icon.png",
+      "artifactName": "AP-Rechnungstool-Setup-${version}.${ext}",
+      "publisherName": "Alexander Pösl"
     },
     "mac": {
       "icon": "assets/icons/icon.png",

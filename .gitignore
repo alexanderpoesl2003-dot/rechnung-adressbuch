@@ -17,9 +17,15 @@ Kundendaten_extrahiert.csv
 # GmbH) - keine eigene Projektdatei, Weitergabe laut Lizenz untersagt
 Handbuch.pdf
 
-# Geheimnis für die Produktschlüssel-Prüfung (siehe src/main/services/lizenz.js) -
-# NIEMALS committen, sonst könnte jeder mit Repo-Zugriff eigene gültige
-# Schlüssel erzeugen. Wird beim Bauen der App (electron-builder) trotzdem mit
-# in die Installationsdateien gepackt (siehe package.json: build.extraResources) -
-# landet also in der fertigen App, aber nicht im Git-Verlauf.
+# Geheimnis des ALTEN, seit Block 3 durch Ed25519 ersetzten Lizenzverfahrens
+# (siehe src/main/services/lizenz.js) - NIEMALS committen, falls hier lokal
+# doch wieder eine angelegt werden sollte. Wird seit Block 3 NICHT mehr in
+# package.json: build.files gepackt. Das frühere Generator-Skript, das diese
+# Datei brauchte, wurde beim Aufräumen entfernt (keine aktive Legacy-Lizenz
+# mehr im Umlauf) - dieser Eintrag bleibt nur als Vorsichtsmaßnahme stehen.
 lizenz-geheimnis.local.json
+
+# Neues Ed25519-Verfahren (Block 3): das Geheimnis (privater Schlüssel) liegt
+# ausschließlich im separaten Projekt ap-lizenzverwaltung, außerhalb dieses
+# Repos, sicher verschlüsselt in app.getPath('userData') - hier gibt es dafür
+# keine Datei, die ignoriert werden müsste.

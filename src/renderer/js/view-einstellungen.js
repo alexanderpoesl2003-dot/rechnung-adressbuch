@@ -13,8 +13,13 @@ async function renderEinstellungen(container) {
             <div id="lizenz-bereich"></div>
 
             <h2>Datensicherung</h2>
-            <p>Erstellt eine eigenständige Kopie der kompletten Datenbank (Kunden, Rechnungen, Belege, Artikel, ...) an einem frei wählbaren Speicherort.</p>
+            <p>Backups werden ausschließlich lokal auf diesem Rechner gespeichert - kein Cloud-Upload, keine Übertragung an Dritte.</p>
+            <p>Erstellt eine eigenständige Kopie aller Daten (Datenbank inkl. Kunden/Rechnungen/Belege/Artikel sowie Firmenlogos) in einer einzigen Datei.</p>
             <button class="btn btn-primary" id="btn-backup">Backup jetzt erstellen</button>
+            <button class="btn btn-gefahr" id="btn-restore">Backup wiederherstellen</button>
+
+            <h3 style="font-size:14px;margin-top:24px;">Automatische Backups</h3>
+            <div id="auto-backup-bereich"></div>
 
             <h2>Textbausteine</h2>
             <p>Frei verwaltbare Textbausteine, die beim Schreiben von Rechnungen, Belegen und Mahnungen zum Anhaken zur Verfügung stehen.</p>
@@ -46,6 +51,39 @@ async function renderEinstellungen(container) {
             showFehler(err.message);
         }
     });
+
+    container.querySelector('#btn-restore').addEventListener('click', async () => {
+        try {
+            const auswahl = await window.api.backup.auswaehlenUndValidieren();
+            if (!auswahl) return; // Nutzer hat den Dateidialog abgebrochen
+
+            const m = auswahl.manifest;
+            const bestaetigt = confirm(
+                'ACHTUNG: Beim Wiederherstellen werden ALLE aktuellen Daten (Kunden, Rechnungen, Belege, ' +
+                'Einstellungen) durch den Stand aus diesem Backup ERSETZT.\n\n' +
+                `Backup vom: ${m.createdAt ? new Date(m.createdAt).toLocaleString('de-DE') : 'unbekannt'}\n` +
+                `Erstellt mit Version: ${m.appVersion || 'unbekannt'}\n` +
+                `Enthaltene Logo-Dateien: ${(m.includedFiles || []).length}\n\n` +
+                'Von deinem AKTUELLEN Stand wird vor der Wiederherstellung automatisch ' +
+                'ein Sicherheitsbackup angelegt.\n\n' +
+                'Wirklich fortfahren?'
+            );
+            if (!bestaetigt) return;
+
+            const ergebnis = await window.api.backup.wiederherstellen(auswahl.pfad);
+            const neustart = confirm(
+                'Wiederherstellung erfolgreich!\n\n' +
+                `Sicherheitsbackup des vorherigen Stands liegt unter:\n${ergebnis.sicherheitsBackupPfad}\n\n` +
+                'Die Anwendung muss jetzt neu gestartet werden, damit alle Ansichten den ' +
+                'wiederhergestellten Stand korrekt anzeigen. Jetzt neu starten?'
+            );
+            if (neustart) await window.api.app.neustart();
+        } catch (err) {
+            showFehler(err.message);
+        }
+    });
+
+    await renderAutoBackupBereich(container.querySelector('#auto-backup-bereich'));
 
     container.querySelector('#btn-update-check').addEventListener('click', async (event) => {
         const btn = event.target;
@@ -144,6 +182,71 @@ async function renderEinstellungen(container) {
             }
         });
     }
+}
+
+// Automatische Backups (siehe Auftrag Block 3, Punkt 7): Ein/Aus, Intervall,
+// Zielverzeichnis, Anzahl zu behaltender Sicherungen (Rotation).
+async function renderAutoBackupBereich(bereich) {
+    const einstellungen = await window.api.backup.autoEinstellungenGet();
+
+    bereich.innerHTML = '';
+    bereich.appendChild(el(`
+        <form class="formular" id="auto-backup-formular" style="max-width:480px;">
+            <label style="flex-direction:row;align-items:center;gap:6px;">
+                <input type="checkbox" name="aktiv" style="width:auto;" ${einstellungen.aktiv ? 'checked' : ''} />
+                <span>Automatische Backups aktivieren</span>
+            </label>
+            <label>Intervall
+                <select name="intervall">
+                    <option value="taeglich" ${einstellungen.intervall === 'taeglich' ? 'selected' : ''}>Täglich</option>
+                    <option value="woechentlich" ${einstellungen.intervall === 'woechentlich' ? 'selected' : ''}>Wöchentlich</option>
+                </select>
+            </label>
+            <label>Backup-Verzeichnis
+                <div style="display:flex;gap:8px;">
+                    <input type="text" name="verzeichnisAnzeige" readonly value="${escapeHtml(einstellungen.verzeichnis || '(noch nicht gewählt)')}" style="flex:1;" />
+                    <button type="button" class="btn btn-klein" id="btn-auto-backup-verzeichnis">Auswählen…</button>
+                </div>
+            </label>
+            <label>Anzahl zu behaltender automatischer Backups
+                <input type="number" name="anzahlBehalten" min="1" max="100" value="${einstellungen.anzahlBehalten}" style="max-width:100px;" />
+            </label>
+            <p style="font-size:12px;color:#98a2b3;">
+                Läuft nur, wenn die App gestartet wird (kein Hintergrunddienst) - beim Start wird geprüft,
+                ob das gewählte Intervall seit dem letzten automatischen Backup abgelaufen ist.
+                ${einstellungen.letzterZeitpunkt ? `Letztes automatisches Backup: ${new Date(einstellungen.letzterZeitpunkt).toLocaleString('de-DE')}.` : 'Bisher noch kein automatisches Backup erstellt.'}
+            </p>
+            <div class="formular-aktionen">
+                <button type="submit" class="btn btn-primary">Speichern</button>
+            </div>
+        </form>
+    `));
+
+    let gewaehltesVerzeichnis = einstellungen.verzeichnis;
+
+    bereich.querySelector('#btn-auto-backup-verzeichnis').addEventListener('click', async () => {
+        const pfad = await window.api.backup.autoVerzeichnisWaehlen();
+        if (!pfad) return;
+        gewaehltesVerzeichnis = pfad;
+        bereich.querySelector('[name="verzeichnisAnzeige"]').value = pfad;
+    });
+
+    bereich.querySelector('#auto-backup-formular').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = event.target;
+        try {
+            await window.api.backup.autoEinstellungenSave({
+                aktiv: form.aktiv.checked,
+                intervall: form.intervall.value,
+                verzeichnis: gewaehltesVerzeichnis,
+                anzahlBehalten: form.anzahlBehalten.value
+            });
+            alert('Einstellungen für automatische Backups wurden gespeichert.');
+            renderAutoBackupBereich(bereich);
+        } catch (err) {
+            showFehler(err.message);
+        }
+    });
 }
 
 async function renderTextbausteineBereich(bereich) {
@@ -348,9 +451,9 @@ async function renderLizenzBereich(bereich) {
     bereich.appendChild(el(`
         <div>
             <p>Status: <strong>${escapeHtml(statusText)}</strong></p>
-            <form class="formular" id="lizenz-einloesen-formular" style="max-width:360px;">
-                <label>Produktschlüssel
-                    <input type="text" name="schluessel" placeholder="AP-XXXXX-XXXX-XXXX" style="text-align:center;letter-spacing:1px;" />
+            <form class="formular" id="lizenz-einloesen-formular" style="max-width:480px;">
+                <label>Produktschlüssel (per E-Mail erhalten, komplett einfügen)
+                    <textarea name="schluessel" rows="3" style="font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;"></textarea>
                 </label>
                 <div class="formular-aktionen">
                     <button type="submit" class="btn btn-primary">Einlösen</button>

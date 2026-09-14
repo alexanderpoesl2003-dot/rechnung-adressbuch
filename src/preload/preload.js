@@ -11,7 +11,8 @@ async function invoke(channel, ...args) {
 contextBridge.exposeInMainWorld('api', {
     app: {
         version: () => invoke('app:version'),
-        checkForUpdates: () => invoke('app:checkForUpdates')
+        checkForUpdates: () => invoke('app:checkForUpdates'),
+        neustart: () => invoke('app:neustart')
     },
     profiles: {
         list: () => invoke('profiles:list'),
@@ -71,7 +72,12 @@ contextBridge.exposeInMainWorld('api', {
         remove: (id) => invoke('notizen:remove', id)
     },
     backup: {
-        erstellen: () => invoke('backup:erstellen')
+        erstellen: () => invoke('backup:erstellen'),
+        auswaehlenUndValidieren: () => invoke('backup:auswaehlenUndValidieren'),
+        wiederherstellen: (pfad) => invoke('backup:wiederherstellen', pfad),
+        autoEinstellungenGet: () => invoke('backup:autoEinstellungenGet'),
+        autoEinstellungenSave: (daten) => invoke('backup:autoEinstellungenSave', daten),
+        autoVerzeichnisWaehlen: () => invoke('backup:autoVerzeichnisWaehlen')
     },
     mwstSaetze: {
         list: (profileId) => invoke('mwstSaetze:list', profileId),

@@ -33,8 +33,8 @@ async function pruefeLizenzGate() {
                     <p><strong>${escapeHtml(status.kontaktEmail)}</strong></p>
                     ${fehler ? `<p style="color:#b42318;">${escapeHtml(fehler)}</p>` : ''}
                     <form id="lizenz-formular">
-                        <input type="text" name="schluessel" placeholder="AP-XXXXX-XXXX-XXXX" autofocus
-                               style="width:100%;padding:8px;margin-bottom:10px;box-sizing:border-box;text-align:center;letter-spacing:1px;" />
+                        <textarea name="schluessel" autofocus rows="3"
+                               style="width:100%;padding:8px;margin-bottom:10px;box-sizing:border-box;font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;"></textarea>
                         <button type="submit" class="btn btn-primary" style="width:100%;">Freischalten</button>
                     </form>
                 </div>

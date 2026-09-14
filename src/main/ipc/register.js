@@ -10,7 +10,8 @@ const belege = require('../models/belege');
 const mahnungen = require('../models/mahnungen');
 const notizen = require('../models/notizen');
 const search = require('../models/search');
-const { erstelleBackup } = require('../services/backup');
+const { erstelleBackup, backupLesenUndValidieren, wiederherstellen } = require('../services/backup');
+const autoBackup = require('../services/auto-backup');
 const settings = require('../models/settings');
 const mwstSaetze = require('../models/mwst-saetze');
 const { BELEG_TYPEN } = require('../beleg-typen');
@@ -334,22 +335,60 @@ function registerIpcHandlers() {
     handle('notizen:setErledigt', (id, erledigt) => notizen.setErledigt(id, erledigt));
     handleGeschuetzt('notizen:remove', (id) => notizen.remove(id));
 
-    // Datensicherung - erfordert Anmeldung (siehe Auftrag Punkt 9: "Backup-nahe
-    // Funktionen"), aber bewusst KEINE Lizenzprüfung: der Zugriff auf die
-    // eigenen Daten darf nicht durch einen abgelaufenen Testzeitraum blockiert
-    // werden.
+    // Datensicherung/Wiederherstellung - erfordert Anmeldung (siehe Auftrag
+    // Punkt 9: "Backup-/Restore-nahe Funktionen"), aber bewusst KEINE
+    // Lizenzprüfung: der Zugriff auf die eigenen Daten darf nicht durch einen
+    // abgelaufenen Testzeitraum blockiert werden (siehe Auftrag Punkt 8/28).
     handleAuth('backup:erstellen', async () => {
         const zeitstempel = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
         const result = await dialog.showSaveDialog({
             title: 'Datensicherung speichern',
-            defaultPath: `rechnung-adressbuch-backup-${zeitstempel}.sqlite`,
-            filters: [{ name: 'SQLite-Datenbank', extensions: ['sqlite'] }]
+            defaultPath: `AP-Rechnungstool-Backup-${zeitstempel}.apbackup`,
+            filters: [{ name: 'AP-Rechnungstool-Backup', extensions: ['apbackup'] }]
         });
         if (result.canceled || !result.filePath) return null;
 
-        erstelleBackup(result.filePath);
+        const { manifest } = erstelleBackup(result.filePath);
         shell.showItemInFolder(result.filePath);
-        return { pfad: result.filePath };
+        return { pfad: result.filePath, manifest };
+    });
+
+    // Restore, Schritt 1: Datei auswählen und NUR validieren (liest/prüft,
+    // verändert nichts) - Ergebnis dient der Bestätigungsabfrage in der UI.
+    handleAuth('backup:auswaehlenUndValidieren', async () => {
+        const result = await dialog.showOpenDialog({
+            title: 'Backup-Datei auswählen',
+            filters: [{ name: 'AP-Rechnungstool-Backup', extensions: ['apbackup'] }],
+            properties: ['openFile']
+        });
+        if (result.canceled || result.filePaths.length === 0) return null;
+
+        const { manifest } = backupLesenUndValidieren(result.filePaths[0]);
+        return { pfad: result.filePaths[0], manifest };
+    });
+
+    // Restore, Schritt 2: die eigentliche, geführte Wiederherstellung (siehe
+    // services/backup.js: legt zuerst automatisch ein Sicherheitsbackup des
+    // aktuellen Zustands an, rollt bei jedem Fehler darauf zurück).
+    handleAuth('backup:wiederherstellen', (pfad) => wiederherstellen(pfad));
+
+    // Automatische Backups (siehe Auftrag Punkt 7)
+    handle('backup:autoEinstellungenGet', () => autoBackup.getAutoBackupEinstellungen());
+    handleAuth('backup:autoEinstellungenSave', (daten) => autoBackup.saveAutoBackupEinstellungen(daten));
+    handleAuth('backup:autoVerzeichnisWaehlen', async () => {
+        const result = await dialog.showOpenDialog({
+            title: 'Verzeichnis für automatische Backups wählen',
+            properties: ['openDirectory', 'createDirectory']
+        });
+        if (result.canceled || result.filePaths.length === 0) return null;
+        return result.filePaths[0];
+    });
+
+    // Programmneustart (z.B. nach erfolgreicher Wiederherstellung, siehe
+    // Auftrag Punkt 5, Schritt 10).
+    handle('app:neustart', () => {
+        app.relaunch();
+        app.exit(0);
     });
 
     // Produktschlüssel/Testzeitraum (siehe Auftrag "Produktschlüssel für

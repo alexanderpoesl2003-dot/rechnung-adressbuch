@@ -1,18 +1,28 @@
 // Produktschlüssel + Testzeitraum (siehe Auftrag "Produktschlüssel für
-// Weitergabe"). Ziel ist bewusst KEIN hartes Kopierschutz-System (bei einer
-// lokal laufenden, offline funktionierenden Desktop-App ohne eigenen Server
-// technisch ohnehin nicht wirklich durchsetzbar - wer will, kann eine
-// Electron-App immer auseinandernehmen) - sondern eine einfache, robuste
-// Hürde gegen achtloses Weiterreichen, wie vom Auftraggeber selbst so
-// gewünscht.
+// Weitergabe", später erweitert um Ed25519 in Block 3 "Backup/Restore,
+// Lizenzsystem, Distribution und Signing-Vorbereitung"). Ziel ist bewusst
+// KEIN hartes Kopierschutz-System (bei einer lokal laufenden, offline
+// funktionierenden Desktop-App ohne eigenen Server technisch ohnehin nicht
+// wirklich durchsetzbar - wer will, kann eine Electron-App immer
+// auseinandernehmen) - sondern eine einfache, robuste Hürde gegen achtloses
+// Weiterreichen, wie vom Auftraggeber selbst so gewünscht.
 //
-// Funktionsweise: jeder Schlüssel kodiert eine Seriennummer + eine Prüfsumme
-// (HMAC-SHA256 mit einem Geheimnis, das NICHT im Git-Repo liegt - siehe
-// lizenz-geheimnis.local.json, .gitignore). Die App selbst braucht nur
-// dieses eine Geheimnis, um JEDEN damit erzeugten Schlüssel offline zu
-// prüfen - es muss also keine Liste "gültiger Schlüssel" mitgeliefert oder
-// online abgeglichen werden. Neue Schlüssel lassen sich jederzeit (auch
-// offline) über scripts/lizenz-schluessel-erzeugen.js erstellen.
+// NEUE Funktionsweise (ab Block 3): jeder Schlüssel ist ein Ed25519-signierter
+// Datensatz (siehe lizenz-format.js, Präfix "AP1."). Signiert wird
+// ausschließlich im separaten Lizenzverwaltungs-Tool (ap-lizenzverwaltung),
+// das den privaten Schlüssel besitzt - DIESES Rechnungstool enthält
+// ausschließlich den öffentlichen Schlüssel (siehe ED25519_PUBLIC_KEY_PEM
+// unten, kein Geheimnis) und kann Signaturen nur PRÜFEN, niemals neue
+// gültige Lizenzen erzeugen.
+//
+// ALTE Funktionsweise (bis Version 0.5.0, siehe schluesselPruefenLegacyHmac
+// unten): ein Schlüssel im Format AP-XXXXX-XXXX-XXXX kodierte eine
+// Seriennummer + eine HMAC-SHA256-Prüfsumme mit einem geteilten Geheimnis
+// (lizenz-geheimnis.local.json). Dieses Geheimnis wird AB SOFORT nicht mehr
+// mit ausgeliefert (siehe package.json: build.files) - die Legacy-Prüfung
+// bleibt im Code nur für bereits vor der Umstellung ausgegebene Schlüssel
+// erhalten und funktioniert nur noch dort, wo diese Datei lokal noch
+// vorhanden ist (z.B. Entwicklungsrechner). Details siehe Abschlussbericht.
 //
 // WICHTIG (ausdrücklicher Auftrag): niemals destruktiv. Ohne gültigen
 // Schlüssel nach Ablauf des Testzeitraums wird die Bedienoberfläche nur
@@ -21,14 +31,32 @@
 // Schlüssel bleibt dauerhaft gültig (kein "Verbrauch"); geht der
 // gespeicherte Zustand doch einmal verloren (z.B. nach einem Update), zeigt
 // die App einfach wieder die Sperre - derselbe Schlüssel schaltet sie erneut
-// frei, beliebig oft.
+// frei, beliebig oft. Keine Gerätebindung, keine Online-Aktivierung.
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
 const settings = require('../models/settings');
+const { envelopeZerlegen, PRODUCT_ID, FORMAT_VERSION } = require('./lizenz-format');
 
-const TRIAL_TAGE = 10;
+// Öffentlicher Ed25519-Schlüssel des Lizenzverwaltungs-Tools - KEIN Geheimnis,
+// darf offen im Quellcode/Build liegen (siehe Auftrag Block 3, Punkt 18).
+// Erzeugt am 14.09.2026 im separaten Tool ap-lizenzverwaltung
+// (ed25519-schluessel.js) - bei einem Schlüsselwechsel dort muss dieser
+// Konstante-Wert hier manuell nachgezogen werden, sonst werden neu
+// ausgegebene Lizenzen von dieser App-Version nicht mehr akzeptiert.
+const ED25519_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEALPcGLoht1nfw4DxdOMu2fGbf/jH2Ay7D9vpjnpXeSLY=
+-----END PUBLIC KEY-----
+`;
+
+let ed25519PublicKeyObjekt = null;
+function ed25519PublicKey() {
+    if (!ed25519PublicKeyObjekt) ed25519PublicKeyObjekt = crypto.createPublicKey(ED25519_PUBLIC_KEY_PEM);
+    return ed25519PublicKeyObjekt;
+}
+
+const TRIAL_TAGE = 30;
 const INSTALLIERT_AM_SCHLUESSEL = 'lizenz_installiert_am';
 const SCHLUESSEL_SCHLUESSEL = 'lizenz_schluessel';
 
@@ -104,9 +132,15 @@ function pruefsummeFuerSeriennummer(seriennummer) {
     return zahlKodieren(wert, 8);
 }
 
-// Erzeugt einen fertig formatierten Schlüssel für eine Seriennummer - wird
-// NICHT von der App selbst aufgerufen, sondern nur vom separaten
-// Generator-Skript (scripts/lizenz-schluessel-erzeugen.js).
+// VERALTET (Legacy-HMAC, siehe Auftrag Block 3): erzeugt einen Schlüssel im
+// ALTEN Format. Wird NICHT von der App selbst aufgerufen. Das frühere
+// Generator-Skript (scripts/lizenz-schluessel-erzeugen.js) sowie die dafür
+// nötige lizenz-geheimnis.local.json wurden nach der Ed25519-Umstellung
+// entfernt (keine aktive Legacy-Lizenz mehr im Umlauf) - diese Funktion bleibt
+// nur noch als dokumentierter, aktuell funktionsloser Code-Pfad stehen
+// (geheimnisLesen() wirft ohne die Datei zuverlässig einen Fehler). Für neue
+// Lizenzen bitte ausschließlich das Lizenzverwaltungs-Tool (ap-lizenzverwaltung,
+// Ed25519) verwenden.
 function schluesselErzeugen(seriennummer) {
     if (!Number.isInteger(seriennummer) || seriennummer < 1 || seriennummer > MAX_SERIENNUMMER) {
         throw new Error(`Seriennummer muss eine ganze Zahl zwischen 1 und ${MAX_SERIENNUMMER} sein.`);
@@ -116,11 +150,14 @@ function schluesselErzeugen(seriennummer) {
     return `AP-${serialTeil}-${pruefsummeTeil.slice(0, 4)}-${pruefsummeTeil.slice(4, 8)}`;
 }
 
-// Prüft eine vom Nutzer eingegebene Zeichenkette - tolerant gegenüber
-// Groß-/Kleinschreibung, zusätzlichen Leerzeichen und fehlenden/zusätzlichen
-// Bindestrichen, damit ein abgetippter oder per Hand eingefügter Schlüssel
-// nicht an reiner Formatierung scheitert.
-function schluesselPruefen(eingabe) {
+// LEGACY: prüft einen Schlüssel im alten HMAC-Format (AP-XXXXX-XXXX-XXXX) -
+// tolerant gegenüber Groß-/Kleinschreibung, zusätzlichen Leerzeichen und
+// fehlenden/zusätzlichen Bindestrichen. Wird von schluesselPruefen() nur noch
+// als Fallback für VOR der Ed25519-Umstellung ausgegebene Schlüssel benutzt
+// (siehe Auftrag Block 3, Punkt 13) - funktioniert nur, wenn
+// lizenz-geheimnis.local.json lokal noch vorhanden ist (siehe Moduldoc oben;
+// in ausgelieferten Builds ab dieser Version NICHT mehr der Fall).
+function schluesselPruefenLegacyHmac(eingabe) {
     if (!eingabe) return false;
     const bereinigt = String(eingabe).toUpperCase().replace(/[^A-Z0-9]/g, '');
     const OHNE_PREFIX = bereinigt.startsWith('AP') ? bereinigt.slice(2) : bereinigt;
@@ -150,6 +187,53 @@ function schluesselPruefen(eingabe) {
     return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+// Prüft einen Ed25519-signierten Lizenzcode (siehe lizenz-format.js). Gibt
+// bei Gültigkeit den geprüften Payload zurück, sonst null - wirft nie.
+function pruefeEd25519Lizenz(eingabe) {
+    const zerlegt = envelopeZerlegen(eingabe);
+    if (!zerlegt) return null;
+    const { payload, payloadBytes, signatur } = zerlegt;
+
+    if (payload.v !== FORMAT_VERSION) return null;
+    if (payload.productId !== PRODUCT_ID) return null;
+    if (!Number.isInteger(payload.serial) || payload.serial < 1) return null;
+    if (GESPERRTE_SERIENNUMMERN.includes(payload.serial)) return null;
+
+    try {
+        if (!crypto.verify(null, payloadBytes, ed25519PublicKey(), signatur)) return null;
+    } catch {
+        return null; // z.B. falsch geformte Signatur-Bytes
+    }
+    return payload;
+}
+
+// Prüft eine vom Nutzer eingegebene Zeichenkette. Erkennt zuerst das neue
+// Ed25519-Format (Präfix "AP1.", siehe lizenz-format.js) - nur wenn dieses
+// Präfix NICHT vorliegt, wird das alte HMAC-Format versucht (siehe Auftrag
+// Block 3, Punkt 13: Übergangsstrategie für bereits ausgegebene Lizenzen).
+// Ein erkanntes, aber ungültiges AP1-Format fällt bewusst NICHT auf die
+// Legacy-Prüfung zurück (sonst könnte eine absichtlich verfälschte neue
+// Lizenz fälschlich nochmal nach altem Muster interpretiert werden).
+function schluesselPruefen(eingabe) {
+    if (!eingabe) return false;
+    const bereinigt = String(eingabe).trim();
+    if (bereinigt.startsWith('AP1.')) {
+        return pruefeEd25519Lizenz(bereinigt) !== null;
+    }
+    return schluesselPruefenLegacyHmac(bereinigt);
+}
+
+// Liefert 'ed25519' | 'legacy-hmac' | null (kein gültiger Schlüssel) - nur
+// zur internen Information/Anzeige, ändert nichts an der Prüfung selbst.
+function schluesselFormat(eingabe) {
+    if (!eingabe) return null;
+    const bereinigt = String(eingabe).trim();
+    if (bereinigt.startsWith('AP1.')) {
+        return pruefeEd25519Lizenz(bereinigt) !== null ? 'ed25519' : null;
+    }
+    return schluesselPruefenLegacyHmac(bereinigt) ? 'legacy-hmac' : null;
+}
+
 function ersteStartzeitSicherstellen() {
     if (!settings.getWert(INSTALLIERT_AM_SCHLUESSEL)) {
         settings.setWert(INSTALLIERT_AM_SCHLUESSEL, new Date().toISOString());
@@ -166,7 +250,8 @@ function lizenzstatus() {
     if (gespeicherterSchluessel && schluesselPruefen(gespeicherterSchluessel)) {
         return {
             freigeschaltet: true, grund: 'lizenziert', tageVerbleibend: null, tageVergangen: null,
-            trialTage: TRIAL_TAGE, kontaktEmail: KONTAKT_EMAIL
+            trialTage: TRIAL_TAGE, kontaktEmail: KONTAKT_EMAIL,
+            format: schluesselFormat(gespeicherterSchluessel)
         };
     }
 

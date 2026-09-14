@@ -4,6 +4,7 @@ const { initDatabase } = require('./db');
 const { registerIpcHandlers } = require('./ipc/register');
 const { checkForUpdates } = require('./updater');
 const { migriereSmtpPasswortFallsNoetig } = require('./services/rechnung-versand');
+const { autoBackupFallsFaelligAusfuehren } = require('./services/auto-backup');
 
 let mainWindow = null;
 
@@ -41,6 +42,9 @@ app.whenReady().then(() => {
     // Sicherheit, Secret-Handling und IPC-Härtung") - läuft bei jedem Start,
     // analog zu den Datenbank-Migrationen in initDatabase().
     migriereSmtpPasswortFallsNoetig();
+    // Einfache Prüfung "wann war das letzte automatische Backup" bei jedem
+    // Start - kein Scheduler (siehe Auftrag Block 3, Punkt 7).
+    autoBackupFallsFaelligAusfuehren();
     registerIpcHandlers();
     createWindow();
     checkForUpdates();
