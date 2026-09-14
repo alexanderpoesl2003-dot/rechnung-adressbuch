@@ -56,7 +56,9 @@
       ],
       "icon": "assets/icons/icon.png",
       "artifactName": "AP-Rechnungstool-Setup-${version}.${ext}",
-      "publisherName": "Alexander Pösl"
+      "signtoolOptions": {
+        "publisherName": "Alexander Pösl"
+      }
     },
     "mac": {
       "icon": "assets/icons/icon.png",
