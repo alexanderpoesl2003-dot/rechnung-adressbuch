@@ -17,6 +17,10 @@ async function renderEinstellungen(container) {
             <p>Frei verwaltbare Textbausteine, die beim Schreiben von Rechnungen, Belegen und Mahnungen zum Anhaken zur Verfügung stehen.</p>
             <div id="textbausteine-bereich"></div>
 
+            <h2>E-Mail-Versand</h2>
+            <p>Einmal eingerichtet, kann jede Rechnung per Knopfdruck direkt per E-Mail verschickt werden (Text + Rechnung als PDF-Anhang), statt nur das Mailprogramm vorzubefüllen.</p>
+            <div id="email-versand-bereich"></div>
+
             <h2>Passwortschutz</h2>
             <p>Status: <strong>${passwortGesetzt ? 'aktiviert' : 'deaktiviert'}</strong></p>
             <div id="passwort-bereich"></div>
@@ -64,6 +68,7 @@ async function renderEinstellungen(container) {
     });
 
     await renderTextbausteineBereich(container.querySelector('#textbausteine-bereich'));
+    await renderEmailVersandBereich(container.querySelector('#email-versand-bereich'));
 
     const passwortBereich = container.querySelector('#passwort-bereich');
     if (passwortGesetzt) {
@@ -217,6 +222,90 @@ function zeigeTextbausteinFormular(bereich, textBaustein) {
             renderTextbausteineBereich(bereich);
         } catch (err) {
             showFehler(err.message);
+        }
+    });
+}
+
+// E-Mail-Versand: SMTP-Zugangsdaten + frei editierbarer Vorlagentext, einmal
+// zentral für die ganze App (siehe Auftrag "E-Mail-Versand im
+// Rechnungstool") - genutzt vom "Per E-Mail senden"-Knopf bei Rechnungen.
+async function renderEmailVersandBereich(bereich) {
+    const { smtp, emailText, platzhalter } = await window.api.emailVersand.get();
+
+    bereich.innerHTML = '';
+    bereich.appendChild(el(`
+        <div>
+            <form class="formular" id="email-versand-formular" style="max-width:480px;">
+                <label>SMTP-Server <input name="host" value="${escapeHtml(smtp.host)}" placeholder="z.B. smtp.strato.de" /></label>
+                <label>Port <input name="port" value="${escapeHtml(smtp.port)}" placeholder="587" /></label>
+                <label>Verschlüsselung
+                    <select name="verschluesselung">
+                        <option value="tls" ${smtp.verschluesselung === 'tls' ? 'selected' : ''}>STARTTLS (meist Port 587)</option>
+                        <option value="ssl" ${smtp.verschluesselung === 'ssl' ? 'selected' : ''}>SSL/TLS (meist Port 465)</option>
+                        <option value="keine" ${smtp.verschluesselung === 'keine' ? 'selected' : ''}>Keine</option>
+                    </select>
+                </label>
+                <label>Benutzername <input name="benutzer" value="${escapeHtml(smtp.benutzer)}" /></label>
+                <label>Passwort <input type="password" name="passwort" placeholder="${smtp.passwort ? '(bereits hinterlegt - leer lassen, um es beizubehalten)' : ''}" /></label>
+                <label>Standard-Absenderadresse <input name="absenderEmail" value="${escapeHtml(smtp.absenderEmail)}" placeholder="rechnung@beispiel.de" /></label>
+                <label>E-Mail-Text
+                    <textarea name="emailText" rows="8">${escapeHtml(emailText)}</textarea>
+                </label>
+                <p style="font-size:12px;color:#98a2b3;">Verfügbare Platzhalter: ${platzhalter.map((p) => `{${p}}`).join(', ')}</p>
+                <div class="formular-aktionen">
+                    <button type="submit" class="btn btn-primary">Speichern</button>
+                </div>
+            </form>
+
+            <div style="margin-top:16px;max-width:480px;display:flex;gap:8px;align-items:flex-end;">
+                <label style="flex:1;">Testmail an
+                    <input type="email" id="testmail-empfaenger" placeholder="deine@email.de" />
+                </label>
+                <button type="button" class="btn" id="btn-testmail-senden">Testmail senden</button>
+            </div>
+        </div>
+    `));
+
+    bereich.querySelector('#email-versand-formular').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = event.target;
+        try {
+            await window.api.emailVersand.save({
+                smtp: {
+                    host: form.host.value.trim(),
+                    port: form.port.value.trim(),
+                    verschluesselung: form.verschluesselung.value,
+                    benutzer: form.benutzer.value.trim(),
+                    passwort: form.passwort.value,
+                    absenderEmail: form.absenderEmail.value.trim()
+                },
+                emailText: form.emailText.value
+            });
+            alert('E-Mail-Einstellungen wurden gespeichert.');
+            renderEmailVersandBereich(bereich);
+        } catch (err) {
+            showFehler(err.message);
+        }
+    });
+
+    bereich.querySelector('#btn-testmail-senden').addEventListener('click', async () => {
+        const btn = bereich.querySelector('#btn-testmail-senden');
+        const empfaenger = bereich.querySelector('#testmail-empfaenger').value.trim();
+        const aktuellerText = bereich.querySelector('[name="emailText"]').value;
+        btn.disabled = true;
+        btn.textContent = 'Sende...';
+        try {
+            const result = await window.api.emailVersand.testmail(empfaenger, aktuellerText);
+            if (result.ok) {
+                alert(`Testmail wurde an ${empfaenger} gesendet.`);
+            } else {
+                showFehler(`Testmail fehlgeschlagen: ${result.fehler}`);
+            }
+        } catch (err) {
+            showFehler(err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Testmail senden';
         }
     });
 }

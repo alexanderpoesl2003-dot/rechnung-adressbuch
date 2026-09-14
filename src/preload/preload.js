@@ -89,6 +89,11 @@ contextBridge.exposeInMainWorld('api', {
         verifyPassword: (passwort) => invoke('settings:verifyPassword', passwort),
         removePassword: (aktuellesPasswort) => invoke('settings:removePassword', aktuellesPasswort)
     },
+    emailVersand: {
+        get: () => invoke('emailVersand:get'),
+        save: (daten) => invoke('emailVersand:save', daten),
+        testmail: (empfaenger, emailText) => invoke('emailVersand:testmail', empfaenger, emailText)
+    },
     artikel: {
         list: () => invoke('artikel:list'),
         get: (id) => invoke('artikel:get', id),

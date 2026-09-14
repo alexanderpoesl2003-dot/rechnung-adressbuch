@@ -19,6 +19,7 @@ const { renderInvoicePdf } = require('../services/invoice-pdf');
 const { renderBelegPdf } = require('../services/beleg-pdf');
 const { renderMahnungPdf } = require('../services/mahnung-pdf');
 const { extractEmail, buildMailto } = require('../services/email');
+const rechnungVersand = require('../services/rechnung-versand');
 const { oeffneVorschauFenster, druckePdf } = require('../pdf-fenster');
 const { getLogosDir } = require('../db');
 const { checkForUpdatesManuell } = require('../updater');
@@ -184,18 +185,18 @@ function registerIpcHandlers() {
     handle('invoices:previewPdf', (id) => zeigeVorschau(invoices.get(id).rechnungsnummer, renderInvoicePdf, id));
     handle('invoices:print', (id) => druckeBeleg(invoices.get(id).rechnungsnummer, renderInvoicePdf, id));
 
-    // Rechnung per E-Mail versenden
-    handle('invoices:sendEmail', async (id) => {
-        const invoice = invoices.get(id);
-        const customer = customers.get(invoice.customer_id);
-        return bereiteEmailVor({
-            nummer: invoice.rechnungsnummer,
-            kontakt: customer.kontakt,
-            betreffPrefix: 'Rechnung',
-            renderFn: renderInvoicePdf,
-            id
-        });
-    });
+    // Rechnung per E-Mail versenden - echter SMTP-Versand (siehe Auftrag
+    // "E-Mail-Versand im Rechnungstool", services/rechnung-versand.js),
+    // löst den bisherigen mailto:-Weg für Rechnungen ab. Belege/Mahnungen
+    // (weiter unten) nutzen unverändert den mailto:-Weg, da dafür nicht
+    // gefragt wurde.
+    handle('invoices:sendEmail', (id) => rechnungVersand.rechnungPerEmailSenden(id, renderInvoicePdf));
+
+    // E-Mail-Versand-Einstellungen (SMTP, Vorlagentext) - global für die
+    // ganze App, siehe Auftrag "E-Mail-Versand im Rechnungstool".
+    handle('emailVersand:get', () => rechnungVersand.getEmailEinstellungen());
+    handle('emailVersand:save', (daten) => rechnungVersand.saveEmailEinstellungen(daten));
+    handle('emailVersand:testmail', (empfaenger, emailText) => rechnungVersand.testmailSenden(empfaenger, emailText));
 
     // Artikel-Stammdaten
     handle('artikel:list', () => artikel.list());

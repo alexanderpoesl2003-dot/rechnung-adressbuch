@@ -93,15 +93,23 @@ async function renderInvoices(container) {
 
     tbody.querySelectorAll('[data-email]').forEach((btn) => {
         btn.addEventListener('click', async () => {
+            const id = Number(btn.dataset.email);
+            btn.disabled = true;
+            const textVorher = btn.textContent;
+            btn.textContent = 'Sende...';
             try {
-                const result = await window.api.invoices.sendEmail(Number(btn.dataset.email));
-                if (!result.empfaenger) {
-                    alert('Für diesen Kunden ist keine E-Mail-Adresse hinterlegt. Bitte im Mailprogramm manuell eintragen. Die PDF-Datei wurde im Explorer geöffnet - zum Anhängen per Drag & Drop.');
+                const result = await window.api.invoices.sendEmail(id);
+                if (result.versendet) {
+                    await window.api.invoices.updateStatus(id, 'versendet');
+                    renderInvoices(container);
+                } else {
+                    showFehler(`E-Mail konnte nicht gesendet werden: ${result.fehler}`);
                 }
-                await window.api.invoices.updateStatus(Number(btn.dataset.email), 'versendet');
-                renderInvoices(container);
             } catch (err) {
                 showFehler(err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = textVorher;
             }
         });
     });
