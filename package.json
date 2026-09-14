@@ -1,6 +1,6 @@
 {
   "name": "rechnung-adressbuch",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Rechnungs- und Adressbuch-Desktopanwendung mit mehreren Absenderprofilen",
   "main": "src/main/main.js",
   "author": "Alexander Pösl",
