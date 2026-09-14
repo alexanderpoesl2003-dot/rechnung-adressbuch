@@ -89,25 +89,59 @@ function handle(channel, fn) {
     });
 }
 
+// IPC-Härtung (siehe Auftrag "SMTP-Sicherheit, Secret-Handling und
+// IPC-Härtung", Punkt 9/10/11): Kanäle wurden in drei Kategorien eingeteilt -
+//   A) reine Lesefunktionen           -> handle()            (unverändert)
+//   B) normale Schreibfunktionen      -> handle()            (unverändert)
+//   C) sensible/zentrale Funktionen   -> handleAuth()/handleGeschuetzt()
+// KEIN Rollen-/Berechtigungssystem, kein JWT/OAuth/Session-Server - nur zwei
+// einfache, zentrale Prüfungen an genau der Stelle, an der ohnehin jeder
+// IPC-Aufruf vorbeikommt.
+
+// Für Aktionen aus der expliziten "sensibel"-Liste (SMTP-Einstellungen
+// ändern, Passwortschutz ändern, Backup) - verlangt eine main-seitige
+// Anmeldung, FALLS überhaupt ein Passwortschutz aktiv ist (siehe
+// settings.requireAuthentication()). Schützt vor einem direkten IPC-Aufruf,
+// der die Renderer-Sperre in login-gate.js umgeht.
+function handleAuth(channel, fn) {
+    handle(channel, (...args) => {
+        settings.requireAuthentication();
+        return fn(...args);
+    });
+}
+
+// Für zentrale Schreib-/Nutzfunktionen, die den eigentlichen Geschäftswert
+// der Software ausmachen (Kunden/Rechnungen/Belege/... anlegen, ändern,
+// versenden) - verlangt einen aktiven Lizenzstatus (siehe
+// lizenz.requireLizenz()), damit ein abgelaufener Testzeitraum nicht durch
+// simples Überspringen der UI umgangen werden kann. Ändert nichts am
+// Lizenzformat/-algorithmus selbst (siehe Block 3).
+function handleGeschuetzt(channel, fn) {
+    handle(channel, (...args) => {
+        lizenz.requireLizenz();
+        return fn(...args);
+    });
+}
+
 function registerIpcHandlers() {
     // Absenderprofile
     handle('profiles:list', () => profiles.list());
     handle('profiles:get', (id) => profiles.get(id));
-    handle('profiles:create', (data) => profiles.create(data));
-    handle('profiles:update', (id, data) => profiles.update(id, data));
-    handle('profiles:remove', (id) => profiles.remove(id));
+    handleGeschuetzt('profiles:create', (data) => profiles.create(data));
+    handleGeschuetzt('profiles:update', (id, data) => profiles.update(id, data));
+    handleGeschuetzt('profiles:remove', (id) => profiles.remove(id));
 
     // Adressbuch
     handle('customers:list', () => customers.list());
     handle('customers:get', (id) => customers.get(id));
-    handle('customers:create', (data) => customers.create(data));
-    handle('customers:update', (id, data) => customers.update(id, data));
-    handle('customers:remove', (id) => customers.remove(id));
+    handleGeschuetzt('customers:create', (data) => customers.create(data));
+    handleGeschuetzt('customers:update', (id, data) => customers.update(id, data));
+    handleGeschuetzt('customers:remove', (id) => customers.remove(id));
     handle('customers:nextKundennummer', () => customers.nextKundennummer());
     handle('customers:lookupOrtByPlz', (plz) => customers.lookupOrtByPlz(plz));
 
     // CSV-Import
-    handle('customers:importCsv', async () => {
+    handleGeschuetzt('customers:importCsv', async () => {
         const result = await dialog.showOpenDialog({
             title: 'Adressbuch-CSV importieren',
             filters: [{ name: 'CSV-Dateien', extensions: ['csv'] }],
@@ -122,11 +156,11 @@ function registerIpcHandlers() {
     // Rechnungen
     handle('invoices:list', () => invoices.list());
     handle('invoices:get', (id) => invoices.get(id));
-    handle('invoices:create', (data) => invoices.create(data));
-    handle('invoices:update', (id, data) => invoices.update(id, data));
-    handle('invoices:finalisieren', (id) => invoices.finalisieren(id));
+    handleGeschuetzt('invoices:create', (data) => invoices.create(data));
+    handleGeschuetzt('invoices:update', (id, data) => invoices.update(id, data));
+    handleGeschuetzt('invoices:finalisieren', (id) => invoices.finalisieren(id));
     handle('invoices:history', (id) => invoices.getHistory(id));
-    handle('invoices:remove', (id) => invoices.remove(id));
+    handleGeschuetzt('invoices:remove', (id) => invoices.remove(id));
     handle('invoices:listTextBausteine', () => invoices.listTextBausteine());
     handle('invoices:listByCustomer', (customerId) => invoices.listByCustomer(customerId));
     handle('invoices:statistik', (params) => invoices.statistik(params || {}));
@@ -192,28 +226,30 @@ function registerIpcHandlers() {
     // löst den bisherigen mailto:-Weg für Rechnungen ab. Belege/Mahnungen
     // (weiter unten) nutzen unverändert den mailto:-Weg, da dafür nicht
     // gefragt wurde.
-    handle('invoices:sendEmail', (id) => rechnungVersand.rechnungPerEmailSenden(id, renderInvoicePdf));
+    handleGeschuetzt('invoices:sendEmail', (id) => rechnungVersand.rechnungPerEmailSenden(id, renderInvoicePdf));
 
     // E-Mail-Versand-Einstellungen (SMTP, Vorlagentext) - global für die
-    // ganze App, siehe Auftrag "E-Mail-Versand im Rechnungstool".
+    // ganze App, siehe Auftrag "E-Mail-Versand im Rechnungstool". get() liefert
+    // seit "SMTP-Sicherheit"-Auftrag nie mehr ein Passwort (siehe
+    // rechnung-versand.js), save() ändert sensible Zugangsdaten -> Auth-Pflicht.
     handle('emailVersand:get', () => rechnungVersand.getEmailEinstellungen());
-    handle('emailVersand:save', (daten) => rechnungVersand.saveEmailEinstellungen(daten));
+    handleAuth('emailVersand:save', (daten) => rechnungVersand.saveEmailEinstellungen(daten));
     handle('emailVersand:testmail', (empfaenger, emailText) => rechnungVersand.testmailSenden(empfaenger, emailText));
 
     // Artikel-Stammdaten
     handle('artikel:list', () => artikel.list());
     handle('artikel:get', (id) => artikel.get(id));
     handle('artikel:findByNr', (nr) => artikel.findByNr(nr));
-    handle('artikel:create', (data) => artikel.create(data));
-    handle('artikel:update', (id, data) => artikel.update(id, data));
-    handle('artikel:remove', (id) => artikel.remove(id));
+    handleGeschuetzt('artikel:create', (data) => artikel.create(data));
+    handleGeschuetzt('artikel:update', (id, data) => artikel.update(id, data));
+    handleGeschuetzt('artikel:remove', (id) => artikel.remove(id));
 
     // Weitere Belegarten (Angebot, Auftragsbestätigung, Lieferschein, Korrektur-Rechnung)
     handle('belege:typen', () => BELEG_TYPEN);
     handle('belege:list', (typ) => belege.list(typ));
     handle('belege:get', (id) => belege.get(id));
-    handle('belege:create', (typ, data) => belege.create(typ, data));
-    handle('belege:remove', (id) => belege.remove(id));
+    handleGeschuetzt('belege:create', (typ, data) => belege.create(typ, data));
+    handleGeschuetzt('belege:remove', (id) => belege.remove(id));
     handle('belege:exportPdf', async (id) => {
         const beleg = belege.get(id);
         const result = await dialog.showSaveDialog({
@@ -233,7 +269,7 @@ function registerIpcHandlers() {
     handle('belege:print', (id) => druckeBeleg(belege.get(id).belegnummer, renderBelegPdf, id));
 
     // Beleg per E-Mail versenden
-    handle('belege:sendEmail', async (id) => {
+    handleGeschuetzt('belege:sendEmail', async (id) => {
         const beleg = belege.get(id);
         const customer = customers.get(beleg.customer_id);
         return bereiteEmailVor({
@@ -248,8 +284,8 @@ function registerIpcHandlers() {
     // Mahnungen
     handle('mahnungen:list', () => mahnungen.list());
     handle('mahnungen:get', (id) => mahnungen.get(id));
-    handle('mahnungen:create', (data) => mahnungen.create(data));
-    handle('mahnungen:remove', (id) => mahnungen.remove(id));
+    handleGeschuetzt('mahnungen:create', (data) => mahnungen.create(data));
+    handleGeschuetzt('mahnungen:remove', (id) => mahnungen.remove(id));
     handle('mahnungen:exportPdf', async (id) => {
         const mahnung = mahnungen.get(id);
         const result = await dialog.showSaveDialog({
@@ -269,7 +305,7 @@ function registerIpcHandlers() {
     handle('mahnungen:print', (id) => druckeBeleg(mahnungen.get(id).belegnummer, renderMahnungPdf, id));
 
     // Mahnung per E-Mail versenden
-    handle('mahnungen:sendEmail', async (id) => {
+    handleGeschuetzt('mahnungen:sendEmail', async (id) => {
         const mahnung = mahnungen.get(id);
         const customer = customers.get(mahnung.customer_id);
         return bereiteEmailVor({
@@ -291,13 +327,18 @@ function registerIpcHandlers() {
 
     // Notizen
     handle('notizen:list', () => notizen.list());
-    handle('notizen:create', (data) => notizen.create(data));
-    handle('notizen:update', (id, data) => notizen.update(id, data));
+    handleGeschuetzt('notizen:create', (data) => notizen.create(data));
+    handleGeschuetzt('notizen:update', (id, data) => notizen.update(id, data));
+    // setErledigt ist reine Verwaltung eines bestehenden Eintrags (wie
+    // Zahlungsstatus bei Rechnungen) - bewusst nicht lizenzgesperrt.
     handle('notizen:setErledigt', (id, erledigt) => notizen.setErledigt(id, erledigt));
-    handle('notizen:remove', (id) => notizen.remove(id));
+    handleGeschuetzt('notizen:remove', (id) => notizen.remove(id));
 
-    // Datensicherung
-    handle('backup:erstellen', async () => {
+    // Datensicherung - erfordert Anmeldung (siehe Auftrag Punkt 9: "Backup-nahe
+    // Funktionen"), aber bewusst KEINE Lizenzprüfung: der Zugriff auf die
+    // eigenen Daten darf nicht durch einen abgelaufenen Testzeitraum blockiert
+    // werden.
+    handleAuth('backup:erstellen', async () => {
         const zeitstempel = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
         const result = await dialog.showSaveDialog({
             title: 'Datensicherung speichern',
@@ -316,22 +357,26 @@ function registerIpcHandlers() {
     handle('lizenz:status', () => lizenz.lizenzstatus());
     handle('lizenz:einloesen', (schluessel) => lizenz.schluesselEinloesen(schluessel));
 
-    // Passwortschutz
+    // Passwortschutz - verifyPassword ist der Anmeldevorgang selbst (darf nie
+    // die Anmeldung voraussetzen); setPassword/removePassword ändern den
+    // Schutz und erfordern daher eine bestehende Anmeldung, FALLS bereits ein
+    // Passwort aktiv ist (siehe settings.requireAuthentication() - bei der
+    // allerersten Aktivierung ohne bisheriges Passwort ist das ein No-op).
     handle('settings:isPasswordSet', () => settings.isPasswordSet());
-    handle('settings:setPassword', (passwort) => settings.setPassword(passwort));
+    handleAuth('settings:setPassword', (passwort) => settings.setPassword(passwort));
     handle('settings:verifyPassword', (passwort) => settings.verifyPassword(passwort));
-    handle('settings:removePassword', (aktuellesPasswort) => settings.removePassword(aktuellesPasswort));
+    handleAuth('settings:removePassword', (aktuellesPasswort) => settings.removePassword(aktuellesPasswort));
 
     // MwSt-Sätze je Profil
     handle('mwstSaetze:list', (profileId) => mwstSaetze.list(profileId));
-    handle('mwstSaetze:create', (profileId, data) => mwstSaetze.create(profileId, data));
-    handle('mwstSaetze:remove', (id) => mwstSaetze.remove(id));
+    handleGeschuetzt('mwstSaetze:create', (profileId, data) => mwstSaetze.create(profileId, data));
+    handleGeschuetzt('mwstSaetze:remove', (id) => mwstSaetze.remove(id));
 
     // Textbausteine (frei verwaltbar in den Einstellungen)
     handle('textBausteine:list', () => textBausteine.list());
-    handle('textBausteine:create', (data) => textBausteine.create(data));
-    handle('textBausteine:update', (schluessel, data) => textBausteine.update(schluessel, data));
-    handle('textBausteine:remove', (schluessel) => textBausteine.remove(schluessel));
+    handleGeschuetzt('textBausteine:create', (data) => textBausteine.create(data));
+    handleGeschuetzt('textBausteine:update', (schluessel, data) => textBausteine.update(schluessel, data));
+    handleGeschuetzt('textBausteine:remove', (schluessel) => textBausteine.remove(schluessel));
 
     // Logo-Upload für Absenderprofile
     handle('profiles:chooseLogo', async () => {

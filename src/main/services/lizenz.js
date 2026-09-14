@@ -198,11 +198,27 @@ function schluesselEinloesen(eingabe) {
     return true;
 }
 
+// Zentrale, einfache Main-seitige Lizenzprüfung (siehe Auftrag "IPC-Härtung",
+// Punkt 11): wird von zentralen Schreib-/Nutzfunktionen aufgerufen (siehe
+// ipc/register.js), damit ein abgelaufener Testzeitraum nicht allein dadurch
+// umgangen werden kann, dass die UI übersprungen und ein IPC-Kanal direkt
+// aufgerufen wird. Ändert NICHTS am Lizenzformat/-algorithmus selbst (siehe
+// Block 3) - reine Statusabfrage der bestehenden lizenzstatus()-Funktion.
+function requireLizenz() {
+    if (!lizenzstatus().freigeschaltet) {
+        throw new Error(
+            'Der Testzeitraum ist abgelaufen. Bitte geben Sie einen gültigen Produktschlüssel ein ' +
+            '(Einstellungen -> Produktschlüssel).'
+        );
+    }
+}
+
 module.exports = {
     TRIAL_TAGE,
     KONTAKT_EMAIL,
     lizenzstatus,
     schluesselEinloesen,
     schluesselErzeugen,
-    schluesselPruefen
+    schluesselPruefen,
+    requireLizenz
 };

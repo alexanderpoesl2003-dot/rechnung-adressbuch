@@ -3,6 +3,7 @@ const path = require('path');
 const { initDatabase } = require('./db');
 const { registerIpcHandlers } = require('./ipc/register');
 const { checkForUpdates } = require('./updater');
+const { migriereSmtpPasswortFallsNoetig } = require('./services/rechnung-versand');
 
 let mainWindow = null;
 
@@ -35,6 +36,11 @@ function createWindow() {
 
 app.whenReady().then(() => {
     initDatabase();
+    // Einmalige, gefahrlos wiederholbare Migration eines noch vorhandenen
+    // Klartext-SMTP-Passworts auf sichere Speicherung (siehe Auftrag "SMTP-
+    // Sicherheit, Secret-Handling und IPC-Härtung") - läuft bei jedem Start,
+    // analog zu den Datenbank-Migrationen in initDatabase().
+    migriereSmtpPasswortFallsNoetig();
     registerIpcHandlers();
     createWindow();
     checkForUpdates();

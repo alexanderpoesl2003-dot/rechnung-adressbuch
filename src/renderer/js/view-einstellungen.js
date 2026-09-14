@@ -250,7 +250,14 @@ async function renderEmailVersandBereich(bereich) {
                     </select>
                 </label>
                 <label>Benutzername <input name="benutzer" value="${escapeHtml(smtp.benutzer)}" /></label>
-                <label>Passwort <input type="password" name="passwort" placeholder="${smtp.passwort ? '(bereits hinterlegt - leer lassen, um es beizubehalten)' : ''}" /></label>
+                <label>Passwort
+                    <input type="password" name="passwort" placeholder="${smtp.passwortGespeichert ? '•••••••• (hinterlegt - leer lassen, um es beizubehalten)' : ''}" />
+                </label>
+                ${smtp.passwortGespeichert ? `
+                <label style="flex-direction:row;align-items:center;gap:6px;">
+                    <input type="checkbox" name="passwortLoeschen" style="width:auto;" />
+                    <span>Gespeichertes Passwort entfernen</span>
+                </label>` : ''}
                 <label>Standard-Absenderadresse <input name="absenderEmail" value="${escapeHtml(smtp.absenderEmail)}" placeholder="rechnung@beispiel.de" /></label>
                 <label>E-Mail-Text
                     <textarea name="emailText" rows="8">${escapeHtml(emailText)}</textarea>
@@ -281,6 +288,10 @@ async function renderEmailVersandBereich(bereich) {
                     verschluesselung: form.verschluesselung.value,
                     benutzer: form.benutzer.value.trim(),
                     passwort: form.passwort.value,
+                    // Eindeutige, separate Aktion zum Entfernen (siehe Auftrag
+                    // "SMTP-Sicherheit", Fall C) - wird ignoriert, sobald oben
+                    // ein neues Passwort eingegeben wurde (das hat Vorrang).
+                    passwortLoeschen: form.passwortLoeschen ? form.passwortLoeschen.checked : false,
                     absenderEmail: form.absenderEmail.value.trim()
                 },
                 emailText: form.emailText.value
