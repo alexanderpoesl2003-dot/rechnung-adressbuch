@@ -1,6 +1,18 @@
 let rechnungenAnsicht = 'alle';
 
-async function renderInvoices(container) {
+async function renderInvoices(container, params) {
+    if (params && params.neu) {
+        return renderRechnungFormularSeite(container, null);
+    }
+    if (params && params.duplizierenVon) {
+        const vorlage = await window.api.invoices.get(Number(params.duplizierenVon));
+        return renderRechnungFormularSeite(container, vorlage);
+    }
+    if (params && params.bearbeiten) {
+        const rechnung = await window.api.invoices.get(Number(params.bearbeiten));
+        return renderRechnungFormularSeite(container, rechnung, rechnung.id);
+    }
+
     const invoices = rechnungenAnsicht === 'offen'
         ? await window.api.invoices.offenePosten()
         : await window.api.invoices.list();
@@ -25,7 +37,6 @@ async function renderInvoices(container) {
                 </thead>
                 <tbody id="rechnungen-tabelle-body"></tbody>
             </table>
-            <div id="rechnung-formular-bereich"></div>
         </div>
     `));
 
@@ -163,24 +174,14 @@ async function renderInvoices(container) {
     });
 
     tbody.querySelectorAll('[data-duplizieren]').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-            try {
-                const vorlage = await window.api.invoices.get(Number(btn.dataset.duplizieren));
-                zeigeRechnungFormular(container, vorlage);
-            } catch (err) {
-                showFehler(err.message);
-            }
+        btn.addEventListener('click', () => {
+            window.location.hash = `#/invoices?duplizierenVon=${btn.dataset.duplizieren}`;
         });
     });
 
     tbody.querySelectorAll('[data-bearbeiten]').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-            try {
-                const rechnung = await window.api.invoices.get(Number(btn.dataset.bearbeiten));
-                zeigeRechnungFormular(container, rechnung, rechnung.id);
-            } catch (err) {
-                showFehler(err.message);
-            }
+        btn.addEventListener('click', () => {
+            window.location.hash = `#/invoices?bearbeiten=${btn.dataset.bearbeiten}`;
         });
     });
 
@@ -219,19 +220,20 @@ async function renderInvoices(container) {
         });
     });
 
-    container.querySelector('#btn-neue-rechnung').addEventListener('click', () => zeigeRechnungFormular(container));
+    container.querySelector('#btn-neue-rechnung').addEventListener('click', () => { window.location.hash = '#/invoices?neu=1'; });
     container.querySelector('#btn-ansicht-alle').addEventListener('click', () => { rechnungenAnsicht = 'alle'; renderInvoices(container); });
     container.querySelector('#btn-ansicht-offen').addEventListener('click', () => { rechnungenAnsicht = 'offen'; renderInvoices(container); });
 }
 
-// vorlage ist optional: eine bestehende Rechnung (aus invoices.get()), von der
-// Profil/Kunde/Positionen/Texte übernommen werden ("Rechnung duplizieren").
-// Datum und Rechnungsnummer werden dabei immer neu vergeben.
-// bearbeitenId ist optional: die id einer bestehenden Rechnung, die damit statt
-// dupliziert tatsächlich bearbeitet (überschrieben) wird - dann bleiben
-// Rechnungsdatum, Leistungsdatum und Rechnungsnummer aus der Vorlage erhalten.
-async function zeigeRechnungFormular(container, vorlage, bearbeitenId) {
-    const bereich = container.querySelector('#rechnung-formular-bereich');
+// Eigene Seite zum Anlegen/Bearbeiten/Duplizieren (statt Inline-Formular unter
+// der Liste). vorlage ist optional: eine bestehende Rechnung (aus
+// invoices.get()), von der Profil/Kunde/Positionen/Texte übernommen werden
+// ("Rechnung duplizieren"). Datum und Rechnungsnummer werden dabei immer neu
+// vergeben. bearbeitenId ist optional: die id einer bestehenden Rechnung, die
+// damit statt dupliziert tatsächlich bearbeitet (überschrieben) wird - dann
+// bleiben Rechnungsdatum, Leistungsdatum und Rechnungsnummer aus der Vorlage
+// erhalten.
+async function renderRechnungFormularSeite(container, vorlage, bearbeitenId) {
     const [profiles, customers, textBausteine] = await Promise.all([
         window.api.profiles.list(),
         window.api.customers.list(),
@@ -245,62 +247,67 @@ async function zeigeRechnungFormular(container, vorlage, bearbeitenId) {
     const rechnungsdatumWert = istBearbeiten && vorlage ? vorlage.rechnungsdatum : heute();
     const leistungsdatumWert = istBearbeiten && vorlage ? (vorlage.leistungsdatum || vorlage.rechnungsdatum) : heute();
 
-    bereich.innerHTML = '';
-    bereich.appendChild(el(`
-        <form class="formular" id="rechnung-formular">
-            <h2>${istBearbeiten ? 'Rechnung bearbeiten' : (vorlage ? 'Rechnung duplizieren' : 'Neue Rechnung')}</h2>
-            <div class="formular-raster">
-                <label>Absenderprofil
-                    <select name="sender_profile_id" required>
-                        ${profiles.map((p) => `<option value="${p.id}" ${p.id === vorbelegtesProfil ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
-                    </select>
-                </label>
-                <label>Kunde
-                    <select name="customer_id" required>
-                        ${customers.map((k) => `<option value="${k.id}" ${k.id === vorbelegterKunde ? 'selected' : ''}>${escapeHtml(k.kundennummer)} – ${escapeHtml(k.nachname_firma)}</option>`).join('')}
-                    </select>
-                </label>
-                <label>Rechnungsdatum <input type="date" name="rechnungsdatum" value="${rechnungsdatumWert}" required /></label>
-                <label>Leistungsdatum (Datum der Lieferung/Leistung, ggf. abweichend vom Rechnungsdatum)
-                    <input type="date" name="leistungsdatum" value="${leistungsdatumWert}" required />
-                </label>
-                <label>Rechnungsnummer ${istBearbeiten ? '' : '(optional – leer lassen für automatische Vergabe)'}
-                    <input type="text" name="rechnungsnummer" value="${istBearbeiten && vorlage ? escapeHtml(vorlage.rechnungsnummer) : ''}" placeholder="${istBearbeiten ? '' : 'wird automatisch vergeben'}" />
-                </label>
+    container.innerHTML = '';
+    container.appendChild(el(`
+        <div>
+            <div class="view-kopf">
+                <h1>${istBearbeiten ? 'Rechnung bearbeiten' : (vorlage ? 'Rechnung duplizieren' : 'Neue Rechnung')}</h1>
+                <a href="#/invoices" class="btn btn-klein">← Zurück zu den Rechnungen</a>
             </div>
+            <form class="formular" id="rechnung-formular">
+                <div class="formular-raster">
+                    <label>Absenderprofil
+                        <select name="sender_profile_id" required>
+                            ${profiles.map((p) => `<option value="${p.id}" ${p.id === vorbelegtesProfil ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+                        </select>
+                    </label>
+                    <label>Kunde
+                        <select name="customer_id" required>
+                            ${customers.map((k) => `<option value="${k.id}" ${k.id === vorbelegterKunde ? 'selected' : ''}>${escapeHtml(k.kundennummer)} – ${escapeHtml(k.nachname_firma)}</option>`).join('')}
+                        </select>
+                    </label>
+                    <label>Rechnungsdatum <input type="date" name="rechnungsdatum" value="${rechnungsdatumWert}" required /></label>
+                    <label>Leistungsdatum (Datum der Lieferung/Leistung, ggf. abweichend vom Rechnungsdatum)
+                        <input type="date" name="leistungsdatum" value="${leistungsdatumWert}" required />
+                    </label>
+                    <label>Rechnungsnummer ${istBearbeiten ? '' : '(optional – leer lassen für automatische Vergabe)'}
+                        <input type="text" name="rechnungsnummer" value="${istBearbeiten && vorlage ? escapeHtml(vorlage.rechnungsnummer) : ''}" placeholder="${istBearbeiten ? '' : 'wird automatisch vergeben'}" />
+                    </label>
+                </div>
 
-            <h3>Positionen</h3>
-            <table class="tabelle" id="positionen-tabelle">
-                <thead>
-                    <tr><th>Art.-Nr.</th><th>Bezeichnung</th><th>Menge</th><th>EP netto</th><th>MwSt</th><th>Zeilensumme</th><th></th></tr>
-                </thead>
-                <tbody id="positionen-body"></tbody>
-            </table>
-            <button type="button" class="btn btn-klein" id="btn-position-hinzufuegen">+ Position hinzufügen</button>
+                <h3>Positionen</h3>
+                <table class="tabelle" id="positionen-tabelle">
+                    <thead>
+                        <tr><th>Art.-Nr.</th><th>Bezeichnung</th><th>Menge</th><th>EP netto</th><th>MwSt</th><th>Zeilensumme</th><th></th></tr>
+                    </thead>
+                    <tbody id="positionen-body"></tbody>
+                </table>
+                <button type="button" class="btn btn-klein" id="btn-position-hinzufuegen">+ Position hinzufügen</button>
 
-            <div class="summenzeile" id="summen-anzeige"></div>
+                <div class="summenzeile" id="summen-anzeige"></div>
 
-            <label>Extrafeld (individuelle Information, erscheint auf der Rechnung)
-                <textarea name="extra_text" rows="2">${escapeHtml(vorlage ? vorlage.extra_text : '')}</textarea>
-            </label>
+                <label>Extrafeld (individuelle Information, erscheint auf der Rechnung)
+                    <textarea name="extra_text" rows="2">${escapeHtml(vorlage ? vorlage.extra_text : '')}</textarea>
+                </label>
 
-            <h3>Textbausteine</h3>
-            <div id="textbaustein-checkboxen" style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;">
-                ${baueTextbausteinCheckboxenHtml(textBausteine, ausgewaehlteTextbausteine)}
-            </div>
-            <label>Eigener freier Text (erscheint zusätzlich zu den ausgewählten Textbausteinen)
-                <textarea name="freier_text" rows="2">${escapeHtml(vorlage ? vorlage.freier_text : '')}</textarea>
-            </label>
+                <h3>Textbausteine</h3>
+                <div id="textbaustein-checkboxen" style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;">
+                    ${baueTextbausteinCheckboxenHtml(textBausteine, ausgewaehlteTextbausteine)}
+                </div>
+                <label>Eigener freier Text (erscheint zusätzlich zu den ausgewählten Textbausteinen)
+                    <textarea name="freier_text" rows="2">${escapeHtml(vorlage ? vorlage.freier_text : '')}</textarea>
+                </label>
 
-            <div class="formular-aktionen">
-                <button type="submit" class="btn btn-primary">${istBearbeiten ? 'Änderungen speichern' : 'Rechnung erstellen'}</button>
-                <button type="button" class="btn" id="btn-abbrechen">Abbrechen</button>
-            </div>
-        </form>
+                <div class="formular-aktionen">
+                    <button type="submit" class="btn btn-primary">${istBearbeiten ? 'Änderungen speichern' : 'Rechnung erstellen'}</button>
+                    <a href="#/invoices" class="btn">Abbrechen</a>
+                </div>
+            </form>
+        </div>
     `));
 
-    const form = bereich.querySelector('#rechnung-formular');
-    const positionenBody = bereich.querySelector('#positionen-body');
+    const form = container.querySelector('#rechnung-formular');
+    const positionenBody = container.querySelector('#positionen-body');
     let aktuelleMwstSaetze = await window.api.mwstSaetze.list(Number(form.sender_profile_id.value));
 
     function positionsZeile(vorbelegung) {
@@ -331,7 +338,7 @@ async function zeigeRechnungFormular(container, vorlage, bearbeitenId) {
             const ep = Number(zeile.querySelector('[name="einzelpreis_netto"]').value) || 0;
             zeile.querySelector('.zeilensumme').textContent = formatEur(menge * ep);
         });
-        bereich.querySelector('#summen-anzeige').innerHTML = summenHtml(berechneSummenClientseitig(positionen));
+        container.querySelector('#summen-anzeige').innerHTML = summenHtml(berechneSummenClientseitig(positionen));
     }
 
     function neuePositionHinzufuegen(vorbelegung) {
@@ -358,8 +365,7 @@ async function zeigeRechnungFormular(container, vorlage, bearbeitenId) {
         aktualisiereSummen();
     });
 
-    bereich.querySelector('#btn-position-hinzufuegen').addEventListener('click', neuePositionHinzufuegen);
-    bereich.querySelector('#btn-abbrechen').addEventListener('click', () => { bereich.innerHTML = ''; });
+    container.querySelector('#btn-position-hinzufuegen').addEventListener('click', neuePositionHinzufuegen);
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -389,7 +395,7 @@ async function zeigeRechnungFormular(container, vorlage, bearbeitenId) {
             } else {
                 await window.api.invoices.create(data);
             }
-            renderInvoices(container);
+            window.location.hash = '#/invoices';
         } catch (err) {
             showFehler(err.message);
         }

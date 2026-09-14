@@ -2,6 +2,13 @@ async function renderCustomers(container, params) {
     if (params && params.id) {
         return renderKundenDetail(container, Number(params.id));
     }
+    if (params && params.neu) {
+        return renderKundenFormularSeite(container, null);
+    }
+    if (params && params.bearbeiten) {
+        const kunde = await window.api.customers.get(Number(params.bearbeiten));
+        return renderKundenFormularSeite(container, kunde);
+    }
 
     const customers = await window.api.customers.list();
 
@@ -24,7 +31,6 @@ async function renderCustomers(container, params) {
                 </thead>
                 <tbody id="kunden-tabelle-body"></tbody>
             </table>
-            <div id="kunden-formular-bereich"></div>
         </div>
     `));
 
@@ -50,7 +56,7 @@ async function renderCustomers(container, params) {
         btn.addEventListener('click', () => { window.location.hash = `#/customers?id=${btn.dataset.details}`; });
     });
     tbody.querySelectorAll('[data-edit]').forEach((btn) => {
-        btn.addEventListener('click', () => zeigeKundenFormular(container, customers.find((k) => k.id === Number(btn.dataset.edit))));
+        btn.addEventListener('click', () => { window.location.hash = `#/customers?bearbeiten=${btn.dataset.edit}`; });
     });
     tbody.querySelectorAll('[data-delete]').forEach((btn) => {
         btn.addEventListener('click', async () => {
@@ -64,7 +70,7 @@ async function renderCustomers(container, params) {
         });
     });
 
-    container.querySelector('#btn-neuer-kunde').addEventListener('click', () => zeigeKundenFormular(container, null));
+    container.querySelector('#btn-neuer-kunde').addEventListener('click', () => { window.location.hash = '#/customers?neu=1'; });
     container.querySelector('#btn-csv-import').addEventListener('click', async () => {
         try {
             const result = await window.api.customers.importCsv();
@@ -138,46 +144,49 @@ async function renderKundenDetail(container, customerId) {
                     `).join('') || '<tr><td colspan="6">Noch keine Rechnungen für diesen Kunden.</td></tr>'}
                 </tbody>
             </table>
-            <div id="kunden-formular-bereich"></div>
         </div>
     `));
 
-    container.querySelector('#btn-kunde-bearbeiten').addEventListener('click', () => zeigeKundenFormular(container, kunde));
+    container.querySelector('#btn-kunde-bearbeiten').addEventListener('click', () => { window.location.hash = `#/customers?bearbeiten=${kunde.id}`; });
 }
 
-function zeigeKundenFormular(container, kunde) {
-    const bereich = container.querySelector('#kunden-formular-bereich');
+// Eigene Seite zum Anlegen/Bearbeiten (statt Inline-Formular unter der
+// Liste) - kunde ist null bei "Neuer Kunde", sonst der zu bearbeitende Datensatz.
+function renderKundenFormularSeite(container, kunde) {
     const k = kunde || {
         kundennummer: '', anrede: '', nachname_firma: '', vorname_ansprechpartner: '',
         strasse: '', plz: '', ort: '', kontakt: '', notiz: ''
     };
 
-    bereich.innerHTML = '';
-    bereich.appendChild(el(`
-        <form class="formular" id="kunden-formular">
-            <h2>${kunde ? 'Kunde bearbeiten' : 'Neuer Kunde'}</h2>
-            <div class="formular-raster">
-                <label>Kundennummer <input name="kundennummer" placeholder="wird automatisch vergeben" value="${escapeHtml(k.kundennummer)}" /></label>
-                <label>Anrede <input name="anrede" value="${escapeHtml(k.anrede)}" /></label>
-                <label>Name/Firma <input name="nachname_firma" value="${escapeHtml(k.nachname_firma)}" required /></label>
-                <label>Ansprechpartner <input name="vorname_ansprechpartner" value="${escapeHtml(k.vorname_ansprechpartner)}" /></label>
-                <label>Straße <input name="strasse" value="${escapeHtml(k.strasse)}" /></label>
-                <label>PLZ <input name="plz" value="${escapeHtml(k.plz)}" /></label>
-                <label>Ort <input name="ort" value="${escapeHtml(k.ort)}" /></label>
-                <label>Telefon/E-Mail/Sonstiges <input name="kontakt" value="${escapeHtml(k.kontakt)}" /></label>
+    container.innerHTML = '';
+    container.appendChild(el(`
+        <div>
+            <div class="view-kopf">
+                <h1>${kunde ? 'Kunde bearbeiten' : 'Neuer Kunde'}</h1>
+                <a href="#/customers" class="btn btn-klein">← Zurück zum Adressbuch</a>
             </div>
-            <label>Notiz <textarea name="notiz">${escapeHtml(k.notiz || '')}</textarea></label>
-            <div class="formular-aktionen">
-                <button type="submit" class="btn btn-primary">Speichern</button>
-                <button type="button" class="btn" id="btn-abbrechen">Abbrechen</button>
-            </div>
-        </form>
+            <form class="formular" id="kunden-formular">
+                <div class="formular-raster">
+                    <label>Kundennummer <input name="kundennummer" placeholder="wird automatisch vergeben" value="${escapeHtml(k.kundennummer)}" /></label>
+                    <label>Anrede <input name="anrede" value="${escapeHtml(k.anrede)}" /></label>
+                    <label>Name/Firma <input name="nachname_firma" value="${escapeHtml(k.nachname_firma)}" required /></label>
+                    <label>Ansprechpartner <input name="vorname_ansprechpartner" value="${escapeHtml(k.vorname_ansprechpartner)}" /></label>
+                    <label>Straße <input name="strasse" value="${escapeHtml(k.strasse)}" /></label>
+                    <label>PLZ <input name="plz" value="${escapeHtml(k.plz)}" /></label>
+                    <label>Ort <input name="ort" value="${escapeHtml(k.ort)}" /></label>
+                    <label>Telefon/E-Mail/Sonstiges <input name="kontakt" value="${escapeHtml(k.kontakt)}" /></label>
+                </div>
+                <label>Notiz <textarea name="notiz">${escapeHtml(k.notiz || '')}</textarea></label>
+                <div class="formular-aktionen">
+                    <button type="submit" class="btn btn-primary">Speichern</button>
+                    <a href="#/customers" class="btn">Abbrechen</a>
+                </div>
+            </form>
+        </div>
     `));
 
-    bereich.querySelector('#btn-abbrechen').addEventListener('click', () => { bereich.innerHTML = ''; });
-
-    const plzFeld = bereich.querySelector('[name="plz"]');
-    const ortFeld = bereich.querySelector('[name="ort"]');
+    const plzFeld = container.querySelector('[name="plz"]');
+    const ortFeld = container.querySelector('[name="ort"]');
     plzFeld.addEventListener('blur', async () => {
         if (!plzFeld.value.trim() || ortFeld.value.trim()) return;
         try {
@@ -188,7 +197,7 @@ function zeigeKundenFormular(container, kunde) {
         }
     });
 
-    bereich.querySelector('#kunden-formular').addEventListener('submit', async (event) => {
+    container.querySelector('#kunden-formular').addEventListener('submit', async (event) => {
         event.preventDefault();
         const data = Object.fromEntries(new FormData(event.target).entries());
         try {
@@ -197,7 +206,7 @@ function zeigeKundenFormular(container, kunde) {
             } else {
                 await window.api.customers.create(data);
             }
-            renderCustomers(container);
+            window.location.hash = '#/customers';
         } catch (err) {
             showFehler(err.message);
         }

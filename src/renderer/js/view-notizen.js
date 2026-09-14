@@ -1,4 +1,9 @@
-async function renderNotizen(container) {
+async function renderNotizen(container, params) {
+    if (params && params.neu) {
+        const customers = await window.api.customers.list();
+        return renderNotizFormularSeite(container, customers);
+    }
+
     const [notizenListe, customers] = await Promise.all([
         window.api.notizen.list(),
         window.api.customers.list()
@@ -17,7 +22,6 @@ async function renderNotizen(container) {
                 </thead>
                 <tbody id="notizen-tabelle-body"></tbody>
             </table>
-            <div id="notiz-formular-bereich"></div>
         </div>
     `));
 
@@ -58,49 +62,51 @@ async function renderNotizen(container) {
         });
     });
 
-    container.querySelector('#btn-neue-notiz').addEventListener('click', () => zeigeNotizFormular(container, customers));
+    container.querySelector('#btn-neue-notiz').addEventListener('click', () => { window.location.hash = '#/notizen?neu=1'; });
 }
 
-function zeigeNotizFormular(container, customers) {
-    const bereich = container.querySelector('#notiz-formular-bereich');
-    bereich.innerHTML = '';
-    bereich.appendChild(el(`
-        <form class="formular" id="notiz-formular">
-            <h2>Neue Notiz</h2>
-            <div class="formular-raster">
-                <label>Priorität (1 = höchste)
-                    <select name="prioritaet">
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3" selected>3</option>
-                        <option value="4">4</option>
-                        <option value="5">5</option>
-                    </select>
-                </label>
-                <label>Kunde (optional)
-                    <select name="customer_id">
-                        <option value="">– keiner –</option>
-                        ${customers.map((k) => `<option value="${k.id}">${escapeHtml(k.kundennummer)} – ${escapeHtml(k.nachname_firma)}</option>`).join('')}
-                    </select>
-                </label>
-                <label>Fällig bis (optional) <input type="date" name="faellig_am" /></label>
+function renderNotizFormularSeite(container, customers) {
+    container.innerHTML = '';
+    container.appendChild(el(`
+        <div>
+            <div class="view-kopf">
+                <h1>Neue Notiz</h1>
+                <a href="#/notizen" class="btn btn-klein">← Zurück zu den Notizen</a>
             </div>
-            <label>Text <textarea name="text" rows="3" required></textarea></label>
-            <div class="formular-aktionen">
-                <button type="submit" class="btn btn-primary">Speichern</button>
-                <button type="button" class="btn" id="btn-abbrechen">Abbrechen</button>
-            </div>
-        </form>
+            <form class="formular" id="notiz-formular">
+                <div class="formular-raster">
+                    <label>Priorität (1 = höchste)
+                        <select name="prioritaet">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3" selected>3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                        </select>
+                    </label>
+                    <label>Kunde (optional)
+                        <select name="customer_id">
+                            <option value="">– keiner –</option>
+                            ${customers.map((k) => `<option value="${k.id}">${escapeHtml(k.kundennummer)} – ${escapeHtml(k.nachname_firma)}</option>`).join('')}
+                        </select>
+                    </label>
+                    <label>Fällig bis (optional) <input type="date" name="faellig_am" /></label>
+                </div>
+                <label>Text <textarea name="text" rows="3" required></textarea></label>
+                <div class="formular-aktionen">
+                    <button type="submit" class="btn btn-primary">Speichern</button>
+                    <a href="#/notizen" class="btn">Abbrechen</a>
+                </div>
+            </form>
+        </div>
     `));
 
-    bereich.querySelector('#btn-abbrechen').addEventListener('click', () => { bereich.innerHTML = ''; });
-
-    bereich.querySelector('#notiz-formular').addEventListener('submit', async (event) => {
+    container.querySelector('#notiz-formular').addEventListener('submit', async (event) => {
         event.preventDefault();
         const data = Object.fromEntries(new FormData(event.target).entries());
         try {
             await window.api.notizen.create(data);
-            renderNotizen(container);
+            window.location.hash = '#/notizen';
         } catch (err) {
             showFehler(err.message);
         }

@@ -2,7 +2,7 @@ let belegAktuellerTyp = 'angebot';
 
 // params.korrekturVon (invoice-id) kommt von der Aktion "Korrekturrechnung
 // erstellen" bei einer finalisierten Rechnung (siehe view-invoices.js) -
-// öffnet direkt ein vorbelegtes Korrektur-Formular statt der leeren Liste.
+// öffnet direkt eine vorbelegte Korrektur-Formularseite statt der Liste.
 async function renderBelege(container, params = {}) {
     const korrekturVonId = params.korrekturVon ? Number(params.korrekturVon) : null;
     if (korrekturVonId) belegAktuellerTyp = 'korrektur';
@@ -10,9 +10,20 @@ async function renderBelege(container, params = {}) {
     const typen = await window.api.belege.typen();
     const typEintraege = Object.entries(typen).filter(([typ]) => typ !== 'mahnung');
     if (!typen[belegAktuellerTyp] || belegAktuellerTyp === 'mahnung') belegAktuellerTyp = typEintraege[0][0];
+    const typDef = typen[belegAktuellerTyp];
+
+    if (korrekturVonId) {
+        // URL wieder bereinigen, ohne die Ansicht erneut zu rendern (history
+        // API statt location.hash, damit kein zweiter hashchange ausgelöst
+        // wird) - ein Neuladen der Seite soll das Formular nicht erneut öffnen.
+        history.replaceState(null, '', '#/belege');
+        return renderBelegFormularSeite(container, 'korrektur', typDef, korrekturVonId);
+    }
+    if (params.neu) {
+        return renderBelegFormularSeite(container, belegAktuellerTyp, typDef);
+    }
 
     const belegeListe = await window.api.belege.list(belegAktuellerTyp);
-    const typDef = typen[belegAktuellerTyp];
 
     container.innerHTML = '';
     container.appendChild(el(`
@@ -28,7 +39,6 @@ async function renderBelege(container, params = {}) {
                 </thead>
                 <tbody id="belege-tabelle-body"></tbody>
             </table>
-            <div id="beleg-formular-bereich"></div>
         </div>
     `));
 
@@ -101,19 +111,10 @@ async function renderBelege(container, params = {}) {
         });
     });
 
-    container.querySelector('#btn-neuer-beleg').addEventListener('click', () => zeigeBelegFormular(container, belegAktuellerTyp, typDef));
-
-    if (korrekturVonId) {
-        // URL wieder bereinigen, ohne die Ansicht erneut zu rendern (history
-        // API statt location.hash, damit kein zweiter hashchange ausgelöst
-        // wird) - ein Neuladen der Seite soll das Formular nicht erneut öffnen.
-        history.replaceState(null, '', '#/belege');
-        await zeigeBelegFormular(container, 'korrektur', typDef, korrekturVonId);
-    }
+    container.querySelector('#btn-neuer-beleg').addEventListener('click', () => { window.location.hash = '#/belege?neu=1'; });
 }
 
-async function zeigeBelegFormular(container, typ, typDef, korrekturVonId) {
-    const bereich = container.querySelector('#beleg-formular-bereich');
+async function renderBelegFormularSeite(container, typ, typDef, korrekturVonId) {
     const [profiles, customers, textBausteine, alleRechnungen, korrekturVorlage] = await Promise.all([
         window.api.profiles.list(),
         window.api.customers.list(),
@@ -132,63 +133,68 @@ async function zeigeBelegFormular(container, typ, typDef, korrekturVonId) {
         ? `Korrektur zu Rechnung ${korrekturVorlage.rechnungsnummer} vom ${formatDatum(korrekturVorlage.rechnungsdatum)}.`
         : '';
 
-    bereich.innerHTML = '';
-    bereich.appendChild(el(`
-        <form class="formular" id="beleg-formular">
-            <h2>Neu: ${escapeHtml(typDef.bezeichnung)}</h2>
-            <div class="formular-raster">
-                <label>Absenderprofil
-                    <select name="sender_profile_id" required>
-                        ${profiles.map((p) => `<option value="${p.id}" ${p.id === vorbelegtesProfil ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
-                    </select>
+    container.innerHTML = '';
+    container.appendChild(el(`
+        <div>
+            <div class="view-kopf">
+                <h1>Neu: ${escapeHtml(typDef.bezeichnung)}</h1>
+                <a href="#/belege" class="btn btn-klein">← Zurück zur Liste</a>
+            </div>
+            <form class="formular" id="beleg-formular">
+                <div class="formular-raster">
+                    <label>Absenderprofil
+                        <select name="sender_profile_id" required>
+                            ${profiles.map((p) => `<option value="${p.id}" ${p.id === vorbelegtesProfil ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+                        </select>
+                    </label>
+                    <label>Kunde
+                        <select name="customer_id" required>
+                            ${customers.map((k) => `<option value="${k.id}" ${k.id === vorbelegterKunde ? 'selected' : ''}>${escapeHtml(k.kundennummer)} – ${escapeHtml(k.nachname_firma)}</option>`).join('')}
+                        </select>
+                    </label>
+                    <label>Datum <input type="date" name="belegdatum" value="${heute()}" required /></label>
+                    ${typ === 'korrektur' ? `
+                    <label>Bezug-Rechnung (optional, nur finalisierte Rechnungen)
+                        <select name="bezug_invoice_id">
+                            <option value="">– keine –</option>
+                            ${finalisierteRechnungen.map((r) => `<option value="${r.id}" ${korrekturVonId === r.id ? 'selected' : ''}>${escapeHtml(r.rechnungsnummer)} – ${escapeHtml(r.kunde_name)}</option>`).join('')}
+                        </select>
+                    </label>` : ''}
+                </div>
+
+                <h3>Positionen</h3>
+                <table class="tabelle" id="positionen-tabelle">
+                    <thead>
+                        <tr><th>Art.-Nr.</th><th>Bezeichnung</th><th>Menge</th>${typDef.zeigtPreise ? '<th>EP netto</th><th>MwSt</th><th>Zeilensumme</th>' : ''}<th></th></tr>
+                    </thead>
+                    <tbody id="positionen-body"></tbody>
+                </table>
+                <button type="button" class="btn btn-klein" id="btn-position-hinzufuegen">+ Position hinzufügen</button>
+
+                ${typDef.zeigtPreise ? '<div class="summenzeile" id="summen-anzeige"></div>' : ''}
+
+                <label>Extrafeld (individuelle Information, erscheint auf dem Beleg)
+                    <textarea name="extra_text" rows="2">${escapeHtml(vorbelegterExtraText)}</textarea>
                 </label>
-                <label>Kunde
-                    <select name="customer_id" required>
-                        ${customers.map((k) => `<option value="${k.id}" ${k.id === vorbelegterKunde ? 'selected' : ''}>${escapeHtml(k.kundennummer)} – ${escapeHtml(k.nachname_firma)}</option>`).join('')}
-                    </select>
+
+                <h3>Textbausteine</h3>
+                <div id="textbaustein-checkboxen" style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;">
+                    ${baueTextbausteinCheckboxenHtml(textBausteine)}
+                </div>
+                <label>Eigener freier Text (erscheint zusätzlich zu den ausgewählten Textbausteinen)
+                    <textarea name="freier_text" rows="2"></textarea>
                 </label>
-                <label>Datum <input type="date" name="belegdatum" value="${heute()}" required /></label>
-                ${typ === 'korrektur' ? `
-                <label>Bezug-Rechnung (optional, nur finalisierte Rechnungen)
-                    <select name="bezug_invoice_id">
-                        <option value="">– keine –</option>
-                        ${finalisierteRechnungen.map((r) => `<option value="${r.id}" ${korrekturVonId === r.id ? 'selected' : ''}>${escapeHtml(r.rechnungsnummer)} – ${escapeHtml(r.kunde_name)}</option>`).join('')}
-                    </select>
-                </label>` : ''}
-            </div>
 
-            <h3>Positionen</h3>
-            <table class="tabelle" id="positionen-tabelle">
-                <thead>
-                    <tr><th>Art.-Nr.</th><th>Bezeichnung</th><th>Menge</th>${typDef.zeigtPreise ? '<th>EP netto</th><th>MwSt</th><th>Zeilensumme</th>' : ''}<th></th></tr>
-                </thead>
-                <tbody id="positionen-body"></tbody>
-            </table>
-            <button type="button" class="btn btn-klein" id="btn-position-hinzufuegen">+ Position hinzufügen</button>
-
-            ${typDef.zeigtPreise ? '<div class="summenzeile" id="summen-anzeige"></div>' : ''}
-
-            <label>Extrafeld (individuelle Information, erscheint auf dem Beleg)
-                <textarea name="extra_text" rows="2">${escapeHtml(vorbelegterExtraText)}</textarea>
-            </label>
-
-            <h3>Textbausteine</h3>
-            <div id="textbaustein-checkboxen" style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;">
-                ${baueTextbausteinCheckboxenHtml(textBausteine)}
-            </div>
-            <label>Eigener freier Text (erscheint zusätzlich zu den ausgewählten Textbausteinen)
-                <textarea name="freier_text" rows="2"></textarea>
-            </label>
-
-            <div class="formular-aktionen">
-                <button type="submit" class="btn btn-primary">${escapeHtml(typDef.bezeichnung)} erstellen</button>
-                <button type="button" class="btn" id="btn-abbrechen">Abbrechen</button>
-            </div>
-        </form>
+                <div class="formular-aktionen">
+                    <button type="submit" class="btn btn-primary">${escapeHtml(typDef.bezeichnung)} erstellen</button>
+                    <a href="#/belege" class="btn">Abbrechen</a>
+                </div>
+            </form>
+        </div>
     `));
 
-    const form = bereich.querySelector('#beleg-formular');
-    const positionenBody = bereich.querySelector('#positionen-body');
+    const form = container.querySelector('#beleg-formular');
+    const positionenBody = container.querySelector('#positionen-body');
     let aktuelleMwstSaetze = typDef.zeigtPreise ? await window.api.mwstSaetze.list(Number(form.sender_profile_id.value)) : [];
 
     function positionsZeile(vorbelegung) {
@@ -221,7 +227,7 @@ async function zeigeBelegFormular(container, typ, typDef, korrekturVonId) {
             const ep = Number(zeile.querySelector('[name="einzelpreis_netto"]').value) || 0;
             zeile.querySelector('.zeilensumme').textContent = formatEur(menge * ep);
         });
-        bereich.querySelector('#summen-anzeige').innerHTML = summenHtml(berechneSummenClientseitig(positionen));
+        container.querySelector('#summen-anzeige').innerHTML = summenHtml(berechneSummenClientseitig(positionen));
     }
 
     function neuePositionHinzufuegen(vorbelegung) {
@@ -256,8 +262,7 @@ async function zeigeBelegFormular(container, typ, typDef, korrekturVonId) {
         });
     }
 
-    bereich.querySelector('#btn-position-hinzufuegen').addEventListener('click', neuePositionHinzufuegen);
-    bereich.querySelector('#btn-abbrechen').addEventListener('click', () => { bereich.innerHTML = ''; });
+    container.querySelector('#btn-position-hinzufuegen').addEventListener('click', neuePositionHinzufuegen);
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -282,7 +287,7 @@ async function zeigeBelegFormular(container, typ, typDef, korrekturVonId) {
 
         try {
             await window.api.belege.create(typ, data);
-            renderBelege(container);
+            window.location.hash = '#/belege';
         } catch (err) {
             showFehler(err.message);
         }

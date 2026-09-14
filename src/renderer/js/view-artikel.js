@@ -1,4 +1,12 @@
-async function renderArtikel(container) {
+async function renderArtikel(container, params) {
+    if (params && params.neu) {
+        return renderArtikelFormularSeite(container, null);
+    }
+    if (params && params.bearbeiten) {
+        const artikel = await window.api.artikel.get(Number(params.bearbeiten));
+        return renderArtikelFormularSeite(container, artikel);
+    }
+
     const artikelListe = await window.api.artikel.list();
 
     container.innerHTML = '';
@@ -17,7 +25,6 @@ async function renderArtikel(container) {
                 </thead>
                 <tbody id="artikel-tabelle-body"></tbody>
             </table>
-            <div id="artikel-formular-bereich"></div>
         </div>
     `));
 
@@ -41,7 +48,7 @@ async function renderArtikel(container) {
     }
 
     tbody.querySelectorAll('[data-edit]').forEach((btn) => {
-        btn.addEventListener('click', () => zeigeArtikelFormular(container, artikelListe.find((a) => a.id === Number(btn.dataset.edit))));
+        btn.addEventListener('click', () => { window.location.hash = `#/artikel?bearbeiten=${btn.dataset.edit}`; });
     });
     tbody.querySelectorAll('[data-delete]').forEach((btn) => {
         btn.addEventListener('click', async () => {
@@ -55,44 +62,46 @@ async function renderArtikel(container) {
         });
     });
 
-    container.querySelector('#btn-neuer-artikel').addEventListener('click', () => zeigeArtikelFormular(container, null));
+    container.querySelector('#btn-neuer-artikel').addEventListener('click', () => { window.location.hash = '#/artikel?neu=1'; });
 }
 
-function zeigeArtikelFormular(container, artikel) {
-    const bereich = container.querySelector('#artikel-formular-bereich');
+function renderArtikelFormularSeite(container, artikel) {
     const a = artikel || {
         artikel_nr: '', bezeichnung: '', verkaufspreis_netto: 0, einkaufspreis_netto: '',
         mwst_satz: 19, warenbestand: '', mindestmenge: ''
     };
 
-    bereich.innerHTML = '';
-    bereich.appendChild(el(`
-        <form class="formular" id="artikel-formular">
-            <h2>${artikel ? 'Artikel bearbeiten' : 'Neuer Artikel'}</h2>
-            <div class="formular-raster">
-                <label>Artikel-Nr. <input name="artikel_nr" value="${escapeHtml(a.artikel_nr)}" required /></label>
-                <label>Bezeichnung <input name="bezeichnung" value="${escapeHtml(a.bezeichnung)}" required /></label>
-                <label>Verkaufspreis netto <input name="verkaufspreis_netto" type="number" step="0.01" value="${a.verkaufspreis_netto}" required /></label>
-                <label>Einkaufspreis netto <input name="einkaufspreis_netto" type="number" step="0.01" value="${a.einkaufspreis_netto ?? ''}" /></label>
-                <label>MwSt-Satz
-                    <select name="mwst_satz">
-                        <option value="19" ${Number(a.mwst_satz) === 19 ? 'selected' : ''}>19%</option>
-                        <option value="7" ${Number(a.mwst_satz) === 7 ? 'selected' : ''}>7%</option>
-                    </select>
-                </label>
-                <label>Warenbestand <input name="warenbestand" type="number" step="1" value="${a.warenbestand ?? ''}" /></label>
-                <label>Mindestmenge <input name="mindestmenge" type="number" step="1" value="${a.mindestmenge ?? ''}" /></label>
+    container.innerHTML = '';
+    container.appendChild(el(`
+        <div>
+            <div class="view-kopf">
+                <h1>${artikel ? 'Artikel bearbeiten' : 'Neuer Artikel'}</h1>
+                <a href="#/artikel" class="btn btn-klein">← Zurück zu den Artikeln</a>
             </div>
-            <div class="formular-aktionen">
-                <button type="submit" class="btn btn-primary">Speichern</button>
-                <button type="button" class="btn" id="btn-abbrechen">Abbrechen</button>
-            </div>
-        </form>
+            <form class="formular" id="artikel-formular">
+                <div class="formular-raster">
+                    <label>Artikel-Nr. <input name="artikel_nr" value="${escapeHtml(a.artikel_nr)}" required /></label>
+                    <label>Bezeichnung <input name="bezeichnung" value="${escapeHtml(a.bezeichnung)}" required /></label>
+                    <label>Verkaufspreis netto <input name="verkaufspreis_netto" type="number" step="0.01" value="${a.verkaufspreis_netto}" required /></label>
+                    <label>Einkaufspreis netto <input name="einkaufspreis_netto" type="number" step="0.01" value="${a.einkaufspreis_netto ?? ''}" /></label>
+                    <label>MwSt-Satz
+                        <select name="mwst_satz">
+                            <option value="19" ${Number(a.mwst_satz) === 19 ? 'selected' : ''}>19%</option>
+                            <option value="7" ${Number(a.mwst_satz) === 7 ? 'selected' : ''}>7%</option>
+                        </select>
+                    </label>
+                    <label>Warenbestand <input name="warenbestand" type="number" step="1" value="${a.warenbestand ?? ''}" /></label>
+                    <label>Mindestmenge <input name="mindestmenge" type="number" step="1" value="${a.mindestmenge ?? ''}" /></label>
+                </div>
+                <div class="formular-aktionen">
+                    <button type="submit" class="btn btn-primary">Speichern</button>
+                    <a href="#/artikel" class="btn">Abbrechen</a>
+                </div>
+            </form>
+        </div>
     `));
 
-    bereich.querySelector('#btn-abbrechen').addEventListener('click', () => { bereich.innerHTML = ''; });
-
-    bereich.querySelector('#artikel-formular').addEventListener('submit', async (event) => {
+    container.querySelector('#artikel-formular').addEventListener('submit', async (event) => {
         event.preventDefault();
         const data = Object.fromEntries(new FormData(event.target).entries());
         try {
@@ -101,7 +110,7 @@ function zeigeArtikelFormular(container, artikel) {
             } else {
                 await window.api.artikel.create(data);
             }
-            renderArtikel(container);
+            window.location.hash = '#/artikel';
         } catch (err) {
             showFehler(err.message);
         }

@@ -1,4 +1,8 @@
-async function renderMahnungen(container) {
+async function renderMahnungen(container, params) {
+    if (params && params.neu) {
+        return renderMahnungFormularSeite(container);
+    }
+
     const mahnungenListe = await window.api.mahnungen.list();
 
     container.innerHTML = '';
@@ -14,7 +18,6 @@ async function renderMahnungen(container) {
                 </thead>
                 <tbody id="mahnungen-tabelle-body"></tbody>
             </table>
-            <div id="mahnung-formular-bereich"></div>
         </div>
     `));
 
@@ -79,51 +82,61 @@ async function renderMahnungen(container) {
         });
     });
 
-    container.querySelector('#btn-neue-mahnung').addEventListener('click', () => zeigeMahnungFormular(container));
+    container.querySelector('#btn-neue-mahnung').addEventListener('click', () => { window.location.hash = '#/mahnungen?neu=1'; });
 }
 
-async function zeigeMahnungFormular(container) {
-    const bereich = container.querySelector('#mahnung-formular-bereich');
+async function renderMahnungFormularSeite(container) {
     const [offenePosten, textBausteine] = await Promise.all([
         window.api.invoices.offenePosten(),
         window.api.invoices.listTextBausteine()
     ]);
 
+    container.innerHTML = '';
+
     if (offenePosten.length === 0) {
-        bereich.innerHTML = '';
-        bereich.appendChild(el('<p>Es gibt aktuell keine offenen (unbezahlten) Rechnungen, zu denen eine Mahnung erstellt werden könnte.</p>'));
+        container.appendChild(el(`
+            <div>
+                <div class="view-kopf">
+                    <h1>Neue Mahnung</h1>
+                    <a href="#/mahnungen" class="btn btn-klein">← Zurück zu den Mahnungen</a>
+                </div>
+                <p>Es gibt aktuell keine offenen (unbezahlten) Rechnungen, zu denen eine Mahnung erstellt werden könnte.</p>
+            </div>
+        `));
         return;
     }
 
-    bereich.innerHTML = '';
-    bereich.appendChild(el(`
-        <form class="formular" id="mahnung-formular">
-            <h2>Neue Mahnung</h2>
-            <div class="formular-raster">
-                <label>Offene Rechnung
-                    <select name="rechnung_id" required>
-                        ${offenePosten.map((r) => `<option value="${r.id}">${escapeHtml(r.rechnungsnummer)} – ${escapeHtml(r.kunde_name)} – offen: ${formatEur(r.offener_betrag)}</option>`).join('')}
-                    </select>
-                </label>
-                <label>Mahnungsdatum <input type="date" name="belegdatum" value="${heute()}" required /></label>
-                <label>Textbaustein
-                    <select name="text_baustein_schluessel">
-                        <option value="">– keiner –</option>
-                        ${textBausteine.map((t) => `<option value="${escapeHtml(t.schluessel)}">${escapeHtml(t.titel)}</option>`).join('')}
-                    </select>
-                </label>
+    container.appendChild(el(`
+        <div>
+            <div class="view-kopf">
+                <h1>Neue Mahnung</h1>
+                <a href="#/mahnungen" class="btn btn-klein">← Zurück zu den Mahnungen</a>
             </div>
-            <label>Mahntext <textarea name="mahntext" rows="6">Trotz Erinnerung liegt uns für die oben genannte Rechnung noch kein Zahlungseingang vor. Wir bitten um Ausgleich des offenen Betrags innerhalb von 7 Tagen.</textarea></label>
-            <div class="formular-aktionen">
-                <button type="submit" class="btn btn-primary">Mahnung erstellen</button>
-                <button type="button" class="btn" id="btn-abbrechen">Abbrechen</button>
-            </div>
-        </form>
+            <form class="formular" id="mahnung-formular">
+                <div class="formular-raster">
+                    <label>Offene Rechnung
+                        <select name="rechnung_id" required>
+                            ${offenePosten.map((r) => `<option value="${r.id}">${escapeHtml(r.rechnungsnummer)} – ${escapeHtml(r.kunde_name)} – offen: ${formatEur(r.offener_betrag)}</option>`).join('')}
+                        </select>
+                    </label>
+                    <label>Mahnungsdatum <input type="date" name="belegdatum" value="${heute()}" required /></label>
+                    <label>Textbaustein
+                        <select name="text_baustein_schluessel">
+                            <option value="">– keiner –</option>
+                            ${textBausteine.map((t) => `<option value="${escapeHtml(t.schluessel)}">${escapeHtml(t.titel)}</option>`).join('')}
+                        </select>
+                    </label>
+                </div>
+                <label>Mahntext <textarea name="mahntext" rows="6">Trotz Erinnerung liegt uns für die oben genannte Rechnung noch kein Zahlungseingang vor. Wir bitten um Ausgleich des offenen Betrags innerhalb von 7 Tagen.</textarea></label>
+                <div class="formular-aktionen">
+                    <button type="submit" class="btn btn-primary">Mahnung erstellen</button>
+                    <a href="#/mahnungen" class="btn">Abbrechen</a>
+                </div>
+            </form>
+        </div>
     `));
 
-    bereich.querySelector('#btn-abbrechen').addEventListener('click', () => { bereich.innerHTML = ''; });
-
-    bereich.querySelector('#mahnung-formular').addEventListener('submit', async (event) => {
+    container.querySelector('#mahnung-formular').addEventListener('submit', async (event) => {
         event.preventDefault();
         const form = event.target;
         const rechnung = offenePosten.find((r) => r.id === Number(form.rechnung_id.value));
@@ -139,7 +152,7 @@ async function zeigeMahnungFormular(container) {
 
         try {
             await window.api.mahnungen.create(data);
-            renderMahnungen(container);
+            window.location.hash = '#/mahnungen';
         } catch (err) {
             showFehler(err.message);
         }

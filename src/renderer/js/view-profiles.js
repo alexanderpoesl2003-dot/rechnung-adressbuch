@@ -1,4 +1,12 @@
-async function renderProfiles(container) {
+async function renderProfiles(container, params) {
+    if (params && params.neu) {
+        return renderProfilFormularSeite(container, null);
+    }
+    if (params && params.bearbeiten) {
+        const profil = await window.api.profiles.get(Number(params.bearbeiten));
+        return renderProfilFormularSeite(container, profil);
+    }
+
     const profiles = await window.api.profiles.list();
 
     container.innerHTML = '';
@@ -9,7 +17,6 @@ async function renderProfiles(container) {
                 <button class="btn btn-primary" id="btn-neues-profil">+ Neues Profil</button>
             </div>
             <div class="karten-liste" id="profil-karten"></div>
-            <div id="profil-formular-bereich"></div>
         </div>
     `));
 
@@ -30,7 +37,7 @@ async function renderProfiles(container) {
     }
 
     karten.querySelectorAll('[data-edit]').forEach((btn) => {
-        btn.addEventListener('click', () => zeigeProfilFormular(container, profiles.find((p) => p.id === Number(btn.dataset.edit))));
+        btn.addEventListener('click', () => { window.location.hash = `#/profiles?bearbeiten=${btn.dataset.edit}`; });
     });
     karten.querySelectorAll('[data-delete]').forEach((btn) => {
         btn.addEventListener('click', async () => {
@@ -44,57 +51,59 @@ async function renderProfiles(container) {
         });
     });
 
-    container.querySelector('#btn-neues-profil').addEventListener('click', () => zeigeProfilFormular(container, null));
+    container.querySelector('#btn-neues-profil').addEventListener('click', () => { window.location.hash = '#/profiles?neu=1'; });
 }
 
-function zeigeProfilFormular(container, profil) {
-    const bereich = container.querySelector('#profil-formular-bereich');
+function renderProfilFormularSeite(container, profil) {
     const p = profil || {
         name: '', briefkopf_name: '', logo_pfad: '', strasse: '', plz: '', ort: '',
         telefon: '', email: '', iban: '', bic: '', bank_name: '', steuernummer: '', ust_id: '',
         rechnungsnummer_prefix: 'R', naechste_laufnummer: 1
     };
 
-    bereich.innerHTML = '';
-    bereich.appendChild(el(`
+    container.innerHTML = '';
+    container.appendChild(el(`
         <div>
-        <form class="formular" id="profil-formular">
-            <h2>${profil ? 'Profil bearbeiten' : 'Neues Profil'}</h2>
-            <div class="formular-raster">
-                <label>Profilname <input name="name" value="${escapeHtml(p.name)}" required /></label>
-                <label>Name im Briefkopf <input name="briefkopf_name" value="${escapeHtml(p.briefkopf_name)}" /></label>
-                <label>Straße <input name="strasse" value="${escapeHtml(p.strasse)}" /></label>
-                <label>PLZ <input name="plz" value="${escapeHtml(p.plz)}" /></label>
-                <label>Ort <input name="ort" value="${escapeHtml(p.ort)}" /></label>
-                <label>Telefon <input name="telefon" value="${escapeHtml(p.telefon)}" /></label>
-                <label>E-Mail <input name="email" value="${escapeHtml(p.email)}" /></label>
-                <label>IBAN <input name="iban" value="${escapeHtml(p.iban)}" /></label>
-                <label>BIC <input name="bic" value="${escapeHtml(p.bic)}" /></label>
-                <label>Bank <input name="bank_name" value="${escapeHtml(p.bank_name)}" /></label>
-                <label>Steuernummer <input name="steuernummer" value="${escapeHtml(p.steuernummer)}" /></label>
-                <label>USt-IdNr. <input name="ust_id" value="${escapeHtml(p.ust_id)}" /></label>
-                <label>Rechnungsnr.-Präfix <input name="rechnungsnummer_prefix" value="${escapeHtml(p.rechnungsnummer_prefix)}" /></label>
-                <label>Nächste laufende Nummer <input name="naechste_laufnummer" type="number" min="1" value="${p.naechste_laufnummer}" /></label>
+            <div class="view-kopf">
+                <h1>${profil ? 'Profil bearbeiten' : 'Neues Profil'}</h1>
+                <a href="#/profiles" class="btn btn-klein">← Zurück zu den Profilen</a>
             </div>
-            <label>Logo
-                <div class="logo-zeile">
-                    <span id="logo-pfad-anzeige">${escapeHtml(p.logo_pfad || 'kein Logo ausgewählt')}</span>
-                    <button type="button" class="btn btn-klein" id="btn-logo-waehlen">Logo wählen…</button>
+            <form class="formular" id="profil-formular">
+                <div class="formular-raster">
+                    <label>Profilname <input name="name" value="${escapeHtml(p.name)}" required /></label>
+                    <label>Name im Briefkopf <input name="briefkopf_name" value="${escapeHtml(p.briefkopf_name)}" /></label>
+                    <label>Straße <input name="strasse" value="${escapeHtml(p.strasse)}" /></label>
+                    <label>PLZ <input name="plz" value="${escapeHtml(p.plz)}" /></label>
+                    <label>Ort <input name="ort" value="${escapeHtml(p.ort)}" /></label>
+                    <label>Telefon <input name="telefon" value="${escapeHtml(p.telefon)}" /></label>
+                    <label>E-Mail <input name="email" value="${escapeHtml(p.email)}" /></label>
+                    <label>IBAN <input name="iban" value="${escapeHtml(p.iban)}" /></label>
+                    <label>BIC <input name="bic" value="${escapeHtml(p.bic)}" /></label>
+                    <label>Bank <input name="bank_name" value="${escapeHtml(p.bank_name)}" /></label>
+                    <label>Steuernummer <input name="steuernummer" value="${escapeHtml(p.steuernummer)}" /></label>
+                    <label>USt-IdNr. <input name="ust_id" value="${escapeHtml(p.ust_id)}" /></label>
+                    <label>Rechnungsnr.-Präfix <input name="rechnungsnummer_prefix" value="${escapeHtml(p.rechnungsnummer_prefix)}" /></label>
+                    <label>Nächste laufende Nummer <input name="naechste_laufnummer" type="number" min="1" value="${p.naechste_laufnummer}" /></label>
                 </div>
-            </label>
-            <input type="hidden" name="logo_pfad" value="${escapeHtml(p.logo_pfad || '')}" />
-            <div class="formular-aktionen">
-                <button type="submit" class="btn btn-primary">Speichern</button>
-                <button type="button" class="btn" id="btn-abbrechen">Abbrechen</button>
-            </div>
-        </form>
-        ${profil ? '<div id="mwst-verwaltung"></div>' : ''}
+                <label>Logo
+                    <div class="logo-zeile">
+                        <span id="logo-pfad-anzeige">${escapeHtml(p.logo_pfad || 'kein Logo ausgewählt')}</span>
+                        <button type="button" class="btn btn-klein" id="btn-logo-waehlen">Logo wählen…</button>
+                    </div>
+                </label>
+                <input type="hidden" name="logo_pfad" value="${escapeHtml(p.logo_pfad || '')}" />
+                <div class="formular-aktionen">
+                    <button type="submit" class="btn btn-primary">Speichern</button>
+                    <a href="#/profiles" class="btn">Abbrechen</a>
+                </div>
+            </form>
+            ${profil ? '<div id="mwst-verwaltung"></div>' : ''}
         </div>
     `));
 
-    if (profil) zeigeMwstVerwaltung(bereich.querySelector('#mwst-verwaltung'), profil.id);
+    if (profil) zeigeMwstVerwaltung(container.querySelector('#mwst-verwaltung'), profil.id);
 
-    const form = bereich.querySelector('#profil-formular');
+    const form = container.querySelector('#profil-formular');
     form.querySelector('#btn-logo-waehlen').addEventListener('click', async () => {
         const pfad = await window.api.profiles.chooseLogo();
         if (pfad) {
@@ -102,7 +111,6 @@ function zeigeProfilFormular(container, profil) {
             form.querySelector('#logo-pfad-anzeige').textContent = pfad;
         }
     });
-    bereich.querySelector('#btn-abbrechen').addEventListener('click', () => { bereich.innerHTML = ''; });
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -113,7 +121,7 @@ function zeigeProfilFormular(container, profil) {
             } else {
                 await window.api.profiles.create(data);
             }
-            renderProfiles(container);
+            window.location.hash = '#/profiles';
         } catch (err) {
             showFehler(err.message);
         }
