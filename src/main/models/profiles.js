@@ -37,7 +37,49 @@ function seedBelegZaehlerFuerProfil(profileId) {
     }
 }
 
+// Ermittelt die höchste bereits vergebene laufende Nummer unter einem
+// bestimmten Rechnungsnummer-Präfix (unabhängig vom Jahr, da der Zähler
+// selbst nicht jahresweise zurückgesetzt wird) - Grundlage für die
+// Rücksprung-/Kollisionsprüfung in update().
+function hoechsteVergebeneLaufnummer(profileId, prefix) {
+    const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const muster = new RegExp(`^${escapedPrefix}\\d{2}-(\\d+)$`);
+    const rows = getDb()
+        .prepare('SELECT rechnungsnummer FROM invoices WHERE sender_profile_id = ?')
+        .all(profileId);
+
+    let hoechste = 0;
+    for (const row of rows) {
+        const treffer = muster.exec(row.rechnungsnummer);
+        if (treffer) hoechste = Math.max(hoechste, parseInt(treffer[1], 10));
+    }
+    return hoechste;
+}
+
 function update(id, data) {
+    const bestehend = get(id);
+    if (!bestehend) throw new Error('Absenderprofil nicht gefunden.');
+
+    const neueDaten = normalize(data);
+    // Schutz des Rechnungsnummernkreises (siehe Auftrag Block 1, Punkt 8):
+    // naechste_laufnummer darf nicht versehentlich auf einen Wert gesetzt
+    // werden, der mit bereits vergebenen Rechnungsnummern kollidieren oder
+    // einen Rücksprung verursachen würde. Nur bei einer tatsächlichen
+    // Änderung geprüft, damit ein einfaches Speichern anderer Profilfelder
+    // nicht an einem unveränderten Wert scheitert.
+    if (neueDaten.naechste_laufnummer !== bestehend.naechste_laufnummer) {
+        const prefixFuerPruefung = neueDaten.rechnungsnummer_prefix;
+        const hoechste = hoechsteVergebeneLaufnummer(id, prefixFuerPruefung);
+        if (neueDaten.naechste_laufnummer <= hoechste) {
+            throw new Error(
+                `Die nächste Rechnungsnummer kann nicht auf ${neueDaten.naechste_laufnummer} gesetzt werden: ` +
+                `unter dem Präfix "${prefixFuerPruefung}" existiert bereits eine Rechnung mit der laufenden ` +
+                `Nummer ${hoechste}. Das würde zu doppelten oder rückspringenden Rechnungsnummern führen. ` +
+                `Bitte einen Wert größer als ${hoechste} wählen.`
+            );
+        }
+    }
+
     const stmt = getDb().prepare(`
         UPDATE sender_profiles SET
             name = @name,
@@ -57,7 +99,7 @@ function update(id, data) {
             naechste_laufnummer = @naechste_laufnummer
         WHERE id = @id
     `);
-    stmt.run({ ...normalize(data), id });
+    stmt.run({ ...neueDaten, id });
     return get(id);
 }
 

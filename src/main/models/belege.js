@@ -1,18 +1,24 @@
 const { getDb } = require('../db');
 const { BELEG_TYPEN } = require('../beleg-typen');
-const { calculateTotals } = require('./invoices');
+const { calculateTotals, logHistory, STATUS_FINALISIERT } = require('./invoices');
 
 function assertBekannterTyp(typ) {
     if (!BELEG_TYPEN[typ]) throw new Error(`Unbekannte Belegart: ${typ}`);
 }
 
+// bezug_rechnungsnummer/-datum werden per LEFT JOIN mitgeliefert, damit eine
+// Korrekturrechnung ihren Bezug auf die ursprüngliche Rechnung auch in der
+// Übersicht sichtbar macht (nicht nur intern über bezug_invoice_id) - siehe
+// Auftrag Block 1, Punkt 7. Ist kein Bezug gesetzt, bleiben die Felder null.
 function list(typ) {
     assertBekannterTyp(typ);
     return getDb().prepare(`
-        SELECT b.*, sp.name AS profil_name, c.nachname_firma AS kunde_name, c.kundennummer AS kunde_nummer
+        SELECT b.*, sp.name AS profil_name, c.nachname_firma AS kunde_name, c.kundennummer AS kunde_nummer,
+               bi.rechnungsnummer AS bezug_rechnungsnummer, bi.rechnungsdatum AS bezug_rechnungsdatum
         FROM belege b
         JOIN sender_profiles sp ON sp.id = b.sender_profile_id
         JOIN customers c ON c.id = b.customer_id
+        LEFT JOIN invoices bi ON bi.id = b.bezug_invoice_id
         WHERE b.typ = ?
         ORDER BY b.erstellt_am DESC
     `).all(typ);
@@ -20,10 +26,12 @@ function list(typ) {
 
 function get(id) {
     const beleg = getDb().prepare(`
-        SELECT b.*, sp.name AS profil_name, c.nachname_firma AS kunde_name
+        SELECT b.*, sp.name AS profil_name, c.nachname_firma AS kunde_name,
+               bi.rechnungsnummer AS bezug_rechnungsnummer, bi.rechnungsdatum AS bezug_rechnungsdatum
         FROM belege b
         JOIN sender_profiles sp ON sp.id = b.sender_profile_id
         JOIN customers c ON c.id = b.customer_id
+        LEFT JOIN invoices bi ON bi.id = b.bezug_invoice_id
         WHERE b.id = ?
     `).get(id);
     if (!beleg) return null;
@@ -70,6 +78,26 @@ function create(typ, data) {
         throw new Error('Ein Beleg benötigt mindestens eine Position.');
     }
 
+    // Eine Korrekturrechnung soll eindeutig auf eine bereits abgeschlossene
+    // Rechnung verweisen (siehe Auftrag Block 1, Punkt 7) - ein Bezug auf
+    // einen noch änderbaren Entwurf ergibt fachlich keinen Sinn, da ein
+    // Entwurf stattdessen direkt korrigiert werden kann. Der Bezug selbst
+    // bleibt optional (nicht jede Korrektur muss eine Systemrechnung betreffen).
+    if (typ === 'korrektur' && data.bezug_invoice_id) {
+        const bezugRechnung = db
+            .prepare('SELECT id, status, rechnungsnummer FROM invoices WHERE id = ?')
+            .get(data.bezug_invoice_id);
+        if (!bezugRechnung) {
+            throw new Error('Die als Bezug gewählte Rechnung wurde nicht gefunden.');
+        }
+        if (bezugRechnung.status !== STATUS_FINALISIERT) {
+            throw new Error(
+                'Eine Korrekturrechnung kann nur auf eine bereits finalisierte Rechnung verweisen. ' +
+                `Rechnung ${bezugRechnung.rechnungsnummer} ist noch ein Entwurf und kann direkt bearbeitet werden.`
+            );
+        }
+    }
+
     const transaction = db.transaction(() => {
         const belegnummer = reserveNextBelegnummer(data.sender_profile_id, typ, data.belegdatum);
 
@@ -111,6 +139,10 @@ function create(typ, data) {
         });
 
         setTextBausteine(belegId, data.textBausteineSchluessel);
+
+        if (typ === 'korrektur' && data.bezug_invoice_id) {
+            logHistory(data.bezug_invoice_id, 'CORRECTION_CREATED', `Korrekturbeleg ${belegnummer}`, db);
+        }
 
         return belegId;
     });

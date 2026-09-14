@@ -155,6 +155,19 @@ async function rechnungPerEmailSenden(invoiceId, renderInvoicePdfFn) {
     const invoice = invoices.get(invoiceId);
     if (!invoice) return { versendet: false, empfaenger: null, fehler: 'Rechnung nicht gefunden.' };
 
+    // Backend-seitige Absicherung (nicht nur UI, siehe Auftrag Block 1,
+    // Punkt 11/12): eine noch nicht finalisierte Rechnung wird NICHT still
+    // automatisch finalisiert und verschickt. Der Renderer führt den Nutzer
+    // stattdessen durch einen bewussten "Erst abschließen, dann versenden"-
+    // Ablauf (siehe view-invoices.js); dieser Check schützt zusätzlich auch
+    // vor einem direkten IPC-Aufruf, der diesen Ablauf umgeht.
+    if (invoice.status !== 'finalisiert') {
+        return {
+            versendet: false, empfaenger: null,
+            fehler: 'Diese Rechnung ist noch ein Entwurf. Bitte zuerst über "Rechnung abschließen" finalisieren, bevor sie per E-Mail versendet wird.'
+        };
+    }
+
     const customer = customers.get(invoice.customer_id);
     const empfaenger = extractEmail(customer.kontakt);
     if (!empfaenger) {

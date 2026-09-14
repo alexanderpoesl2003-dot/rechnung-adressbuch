@@ -1,6 +1,25 @@
 const { getDb } = require('../db');
 const profiles = require('./profiles');
 
+// Fachliche Zustände einer Rechnung (siehe Auftrag "Rechnungslogik,
+// Finalisierung und Nachvollziehbarkeit"): ein Entwurf ist vollständig
+// bearbeitbar, eine finalisierte Rechnung ist inhaltlich unveränderlich und
+// nicht mehr löschbar. Das ist bewusst KEIN rechtliches GoBD-Konformitäts-
+// Versprechen, nur eine technische Absicherung der Nachvollziehbarkeit.
+const STATUS_ENTWURF = 'entwurf';
+const STATUS_FINALISIERT = 'finalisiert';
+
+// Schreibt ein Ereignis in die kleine Rechnungs-Historie (invoice_history).
+// dbHandle erlaubt den Aufruf innerhalb einer bereits laufenden Transaktion
+// (z.B. aus create()/update() dieser Datei oder aus belege.js bei einer
+// Korrekturrechnung) - ohne dbHandle wird die aktuelle Datenbankverbindung
+// verwendet.
+function logHistory(invoiceId, eventType, details, dbHandle) {
+    (dbHandle || getDb())
+        .prepare('INSERT INTO invoice_history (invoice_id, event_type, details) VALUES (?, ?, ?)')
+        .run(invoiceId, eventType, details || null);
+}
+
 function list() {
     return getDb().prepare(`
         SELECT
@@ -114,12 +133,17 @@ function create(data) {
             rechnungsnummer,
             rechnungsdatum: data.rechnungsdatum,
             leistungsdatum: data.leistungsdatum || null,
-            status: data.status || 'entwurf',
+            // Eine neue Rechnung ist immer ein Entwurf - status wird hier
+            // absichtlich NICHT aus data übernommen, damit auch ein direkter
+            // IPC-Aufruf keine bereits "finalisiert" erstellte Rechnung an der
+            // eigentlichen Finalisierungsfunktion (finalisieren()) vorbeischleusen kann.
+            status: STATUS_ENTWURF,
             extra_text: data.extra_text || null,
             freier_text: data.freier_text || null
         });
 
         const invoiceId = info.lastInsertRowid;
+        logHistory(invoiceId, 'CREATED', `Rechnungsnummer ${rechnungsnummer}`, db);
         const insertPosition = db.prepare(`
             INSERT INTO invoice_positions
                 (invoice_id, position, artikel_nr, bezeichnung, menge, einzelpreis_netto, mwst_satz)
@@ -163,6 +187,16 @@ function update(id, data) {
     const db = getDb();
     const bestehende = get(id);
     if (!bestehende) throw new Error('Rechnung nicht gefunden.');
+    // Backend-seitige Sperre (nicht nur UI): eine finalisierte Rechnung darf
+    // inhaltlich nicht mehr verändert werden - auch nicht über einen
+    // direkten IPC-Aufruf. Korrekturen laufen stattdessen über einen
+    // eigenen Korrekturbeleg (siehe belege.js, Typ "korrektur").
+    if (bestehende.status === STATUS_FINALISIERT) {
+        throw new Error(
+            'Diese Rechnung ist bereits finalisiert und kann nicht mehr bearbeitet werden. ' +
+            'Erstellen Sie stattdessen eine Korrekturrechnung.'
+        );
+    }
 
     const positionen = data.positionen || [];
     if (positionen.length === 0) {
@@ -214,6 +248,7 @@ function update(id, data) {
         });
 
         setTextBausteine(id, data.textBausteineSchluessel);
+        logHistory(id, 'UPDATED', null, db);
     });
 
     try {
@@ -228,13 +263,48 @@ function update(id, data) {
     return get(id);
 }
 
-function updateStatus(id, status) {
-    getDb().prepare('UPDATE invoices SET status = ? WHERE id = ?').run(status, id);
+// Dedizierte Finalisierungsfunktion (siehe Auftrag Block 1, Punkt 3): eine
+// bewusste, eigenständige Aktion - ersetzt die bisherige generische
+// updateStatus()-Funktion, die jeden beliebigen Status(auch "finalisiert")
+// ungeprüft gesetzt hätte. Ab hier ist die Rechnungsnummer endgültig fest
+// und der Inhalt gesperrt (siehe update()/remove()).
+function finalisieren(id) {
+    const db = getDb();
+    const transaction = db.transaction(() => {
+        const bestehende = get(id);
+        if (!bestehende) throw new Error('Rechnung nicht gefunden.');
+        if (bestehende.status === STATUS_FINALISIERT) {
+            throw new Error('Diese Rechnung ist bereits finalisiert.');
+        }
+
+        const finalisiertAm = new Date().toISOString();
+        db.prepare('UPDATE invoices SET status = ?, finalisiert_am = ? WHERE id = ?')
+            .run(STATUS_FINALISIERT, finalisiertAm, id);
+        logHistory(id, 'FINALIZED', `Rechnungsnummer ${bestehende.rechnungsnummer}`, db);
+    });
+    transaction();
     return get(id);
 }
 
+function getHistory(invoiceId) {
+    return getDb()
+        .prepare('SELECT * FROM invoice_history WHERE invoice_id = ? ORDER BY id')
+        .all(invoiceId);
+}
+
 function remove(id) {
-    getDb().prepare('DELETE FROM invoices WHERE id = ?').run(id);
+    const db = getDb();
+    const bestehende = db.prepare('SELECT status FROM invoices WHERE id = ?').get(id);
+    // Backend-seitige Sperre: eine finalisierte Rechnung darf niemals hart
+    // gelöscht werden, auch nicht über einen direkten IPC-Aufruf. Existiert
+    // die Rechnung gar nicht (mehr), wird das wie bisher stillschweigend
+    // ignoriert (idempotentes Verhalten).
+    if (bestehende && bestehende.status === STATUS_FINALISIERT) {
+        throw new Error(
+            'Finalisierte Rechnungen können nicht gelöscht werden. Erstellen Sie stattdessen eine Korrekturrechnung.'
+        );
+    }
+    db.prepare('DELETE FROM invoices WHERE id = ?').run(id);
 }
 
 function listTextBausteine() {
@@ -243,7 +313,11 @@ function listTextBausteine() {
 
 // Markiert eine Rechnung als bezahlt/unbezahlt. bezahltBetrag ist optional
 // (z.B. bei Skontoabzug) - fehlt er, wird beim Bezahlen der volle Bruttobetrag angenommen.
+// Der Zahlungsstatus ist reine Verwaltungsinformation und bleibt bewusst
+// AUCH nach der Finalisierung uneingeschränkt änderbar (siehe Auftrag Block 1,
+// Punkt 5) - anders als der eigentliche Rechnungsinhalt in update()/remove().
 function markBezahlt(id, { bezahlt, bezahltAm, bezahltBetrag }) {
+    const db = getDb();
     const invoice = get(id);
     if (!invoice) throw new Error('Rechnung nicht gefunden.');
 
@@ -251,9 +325,17 @@ function markBezahlt(id, { bezahlt, bezahltAm, bezahltBetrag }) {
         ? (bezahltBetrag != null && bezahltBetrag !== '' ? Number(bezahltBetrag) : invoice.summen.brutto)
         : null;
 
-    getDb()
-        .prepare('UPDATE invoices SET bezahlt = ?, bezahlt_am = ?, bezahlt_betrag = ? WHERE id = ?')
-        .run(bezahlt ? 1 : 0, bezahlt ? (bezahltAm || null) : null, betrag, id);
+    const transaction = db.transaction(() => {
+        db.prepare('UPDATE invoices SET bezahlt = ?, bezahlt_am = ?, bezahlt_betrag = ? WHERE id = ?')
+            .run(bezahlt ? 1 : 0, bezahlt ? (bezahltAm || null) : null, betrag, id);
+        logHistory(
+            id,
+            'PAYMENT_STATUS_CHANGED',
+            bezahlt ? `bezahlt (${betrag} €, ${bezahltAm || 'ohne Datum'})` : 'auf offen zurückgesetzt',
+            db
+        );
+    });
+    transaction();
 
     return get(id);
 }
@@ -368,7 +450,9 @@ module.exports = {
     get,
     create,
     update,
-    updateStatus,
+    finalisieren,
+    getHistory,
+    logHistory,
     remove,
     calculateTotals,
     listTextBausteine,
@@ -376,5 +460,7 @@ module.exports = {
     offenePosten,
     listByCustomer,
     statistik,
-    exportSteuerberaterRows
+    exportSteuerberaterRows,
+    STATUS_ENTWURF,
+    STATUS_FINALISIERT
 };

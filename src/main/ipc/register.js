@@ -124,7 +124,8 @@ function registerIpcHandlers() {
     handle('invoices:get', (id) => invoices.get(id));
     handle('invoices:create', (data) => invoices.create(data));
     handle('invoices:update', (id, data) => invoices.update(id, data));
-    handle('invoices:updateStatus', (id, status) => invoices.updateStatus(id, status));
+    handle('invoices:finalisieren', (id) => invoices.finalisieren(id));
+    handle('invoices:history', (id) => invoices.getHistory(id));
     handle('invoices:remove', (id) => invoices.remove(id));
     handle('invoices:listTextBausteine', () => invoices.listTextBausteine());
     handle('invoices:listByCustomer', (customerId) => invoices.listByCustomer(customerId));

@@ -137,6 +137,7 @@ h3 { font-size: 14px; margin: 20px 0 8px; color: #4b5563; }
 }
 .status-versendet { background: #d1fadf; color: #027a48; }
 .status-entwurf { background: #fef0c7; color: #b54708; }
+.status-finalisiert { background: #d1fadf; color: #027a48; }
 
 .karten-liste {
     display: flex;

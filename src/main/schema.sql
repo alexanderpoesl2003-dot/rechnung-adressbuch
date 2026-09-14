@@ -181,3 +181,18 @@ CREATE TABLE IF NOT EXISTS beleg_textbausteine (
     text_baustein_schluessel  TEXT NOT NULL REFERENCES text_bausteine(schluessel),
     PRIMARY KEY (beleg_id, text_baustein_schluessel)
 );
+
+-- Kleine, technische Ereignis-Historie zu Rechnungen (kein vollständiges
+-- Audit-System). Wird per ON DELETE CASCADE automatisch mitgelöscht, falls
+-- ein Entwurf (der einzige Status, der überhaupt hart gelöscht werden darf)
+-- entfernt wird - finalisierte Rechnungen können nicht gelöscht werden
+-- (siehe invoices.js), ihre Historie bleibt also immer erhalten.
+CREATE TABLE IF NOT EXISTS invoice_history (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_id  INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    event_type  TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    details     TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_invoice_history_invoice ON invoice_history(invoice_id);

@@ -31,13 +31,14 @@ async function renderInvoices(container) {
 
     const tbody = container.querySelector('#rechnungen-tabelle-body');
     for (const r of invoices) {
+        const istFinalisiert = r.status === 'finalisiert';
         tbody.appendChild(el(`
             <tr>
                 <td>${escapeHtml(r.rechnungsnummer)}</td>
                 <td>${formatDatum(r.rechnungsdatum)}</td>
                 <td>${escapeHtml(r.profil_name)}</td>
                 <td>${escapeHtml(r.kunde_name)}</td>
-                <td><span class="status status-${escapeHtml(r.status)}">${escapeHtml(r.status)}</span></td>
+                <td><span class="status status-${escapeHtml(r.status)}">${istFinalisiert ? 'Finalisiert' : 'Entwurf'}</span></td>
                 <td>
                     <button class="btn btn-klein ${r.bezahlt ? '' : 'btn-gefahr'}" data-toggle-bezahlt="${r.id}">
                         ${r.bezahlt ? `bezahlt am ${formatDatum(r.bezahlt_am)}` : 'offen'}
@@ -50,9 +51,14 @@ async function renderInvoices(container) {
                         <button class="btn btn-klein" data-drucken="${r.id}">Drucken</button>
                         <button class="btn btn-klein" data-pdf="${r.id}">PDF exportieren</button>
                         <button class="btn btn-klein" data-email="${r.id}">Per E-Mail senden</button>
-                        <button class="btn btn-klein" data-bearbeiten="${r.id}">Bearbeiten</button>
                         <button class="btn btn-klein" data-duplizieren="${r.id}">Duplizieren</button>
+                        ${istFinalisiert ? `
+                        <button class="btn btn-klein" data-korrektur="${r.id}">Korrekturrechnung erstellen</button>
+                        ` : `
+                        <button class="btn btn-klein" data-bearbeiten="${r.id}">Bearbeiten</button>
+                        <button class="btn btn-klein btn-primary" data-finalisieren="${r.id}">Rechnung abschließen</button>
                         <button class="btn btn-klein btn-gefahr" data-delete="${r.id}">Löschen</button>
+                        `}
                     </div>
                 </td>
             </tr>
@@ -82,9 +88,7 @@ async function renderInvoices(container) {
     tbody.querySelectorAll('[data-pdf]').forEach((btn) => {
         btn.addEventListener('click', async () => {
             try {
-                const result = await window.api.invoices.exportPdf(Number(btn.dataset.pdf));
-                if (result) await window.api.invoices.updateStatus(Number(btn.dataset.pdf), 'versendet');
-                renderInvoices(container);
+                await window.api.invoices.exportPdf(Number(btn.dataset.pdf));
             } catch (err) {
                 showFehler(err.message);
             }
@@ -94,13 +98,31 @@ async function renderInvoices(container) {
     tbody.querySelectorAll('[data-email]').forEach((btn) => {
         btn.addEventListener('click', async () => {
             const id = Number(btn.dataset.email);
+            const rechnung = invoices.find((r) => r.id === id);
+
+            // Eine Rechnung, die tatsächlich per E-Mail verschickt wird, muss
+            // vorher abgeschlossen sein (siehe Auftrag Block 1, Punkt 11) -
+            // nicht still und unbemerkt, sondern über eine bewusste Abfrage.
+            if (rechnung && rechnung.status !== 'finalisiert') {
+                const bestaetigt = confirm(
+                    'Diese Rechnung ist noch ein Entwurf. Vor dem Versand muss sie abgeschlossen werden.\n\n' +
+                    'Jetzt abschließen und anschließend versenden?'
+                );
+                if (!bestaetigt) return;
+                try {
+                    await window.api.invoices.finalisieren(id);
+                } catch (err) {
+                    showFehler(err.message);
+                    return;
+                }
+            }
+
             btn.disabled = true;
             const textVorher = btn.textContent;
             btn.textContent = 'Sende...';
             try {
                 const result = await window.api.invoices.sendEmail(id);
                 if (result.versendet) {
-                    await window.api.invoices.updateStatus(id, 'versendet');
                     renderInvoices(container);
                 } else {
                     showFehler(`E-Mail konnte nicht gesendet werden: ${result.fehler}`);
@@ -111,6 +133,32 @@ async function renderInvoices(container) {
                 btn.disabled = false;
                 btn.textContent = textVorher;
             }
+        });
+    });
+
+    tbody.querySelectorAll('[data-finalisieren]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const id = Number(btn.dataset.finalisieren);
+            const rechnung = invoices.find((r) => r.id === id);
+            const bestaetigt = confirm(
+                `Rechnung ${rechnung ? rechnung.rechnungsnummer : ''} abschließen?\n\n` +
+                'Rechnungsnummer, Positionen, Beträge und alle weiteren Rechnungsinhalte können ' +
+                'danach nicht mehr geändert werden. Korrekturen sind anschließend nur noch über ' +
+                'eine Korrekturrechnung möglich.'
+            );
+            if (!bestaetigt) return;
+            try {
+                await window.api.invoices.finalisieren(id);
+                renderInvoices(container);
+            } catch (err) {
+                showFehler(err.message);
+            }
+        });
+    });
+
+    tbody.querySelectorAll('[data-korrektur]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            window.location.hash = `#/belege?korrekturVon=${btn.dataset.korrektur}`;
         });
     });
 

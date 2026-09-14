@@ -46,8 +46,23 @@ function runMigrations() {
     addSpalteFallsFehlt('invoices', 'extra_text', 'TEXT');
     addSpalteFallsFehlt('invoices', 'freier_text', 'TEXT');
     addSpalteFallsFehlt('invoices', 'leistungsdatum', 'TEXT');
+    addSpalteFallsFehlt('invoices', 'finalisiert_am', 'TEXT');
     addSpalteFallsFehlt('belege', 'extra_text', 'TEXT');
     addSpalteFallsFehlt('belege', 'freier_text', 'TEXT');
+    migriereAlteVersendetRechnungen();
+}
+
+// Einmalige (aber gefahrlos wiederholbare) Migration für die neue
+// Entwurf/Finalisiert-Logik (siehe invoices.js): Der bisherige Status
+// "versendet" wurde automatisch nach PDF-Export/E-Mail-Versand gesetzt und
+// bedeutet inhaltlich "kein Entwurf mehr" - genau das, was "finalisiert"
+// jetzt technisch absichert (Inhalt gesperrt, nicht löschbar). Bestehende
+// Rechnungen mit status='entwurf' bleiben unangetastet weiterhin Entwürfe.
+// finalisiert_am bleibt für diese Altdatensätze bewusst leer, da der
+// tatsächliche Versandzeitpunkt nicht zuverlässig bekannt ist - hier wird
+// keine Annahme erfunden.
+function migriereAlteVersendetRechnungen() {
+    db.exec("UPDATE invoices SET status = 'finalisiert' WHERE status = 'versendet'");
 }
 
 function addSpalteFallsFehlt(tabelle, spalte, definition) {
