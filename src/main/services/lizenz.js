@@ -164,17 +164,29 @@ function lizenzstatus() {
 
     const gespeicherterSchluessel = settings.getWert(SCHLUESSEL_SCHLUESSEL);
     if (gespeicherterSchluessel && schluesselPruefen(gespeicherterSchluessel)) {
-        return { freigeschaltet: true, grund: 'lizenziert', tageVerbleibend: null, kontaktEmail: KONTAKT_EMAIL };
+        return {
+            freigeschaltet: true, grund: 'lizenziert', tageVerbleibend: null, tageVergangen: null,
+            trialTage: TRIAL_TAGE, kontaktEmail: KONTAKT_EMAIL
+        };
     }
 
     const installiertAm = new Date(settings.getWert(INSTALLIERT_AM_SCHLUESSEL));
     const vergangeneTage = (Date.now() - installiertAm.getTime()) / (1000 * 60 * 60 * 24);
     const tageVerbleibend = Math.max(0, Math.ceil(TRIAL_TAGE - vergangeneTage));
+    // Für die Anzeige "Tag X von 10" - mindestens Tag 1, auch direkt nach der
+    // Installation (0 vergangene Tage soll nicht als "Tag 0" angezeigt werden).
+    const tageVergangen = Math.min(TRIAL_TAGE, Math.max(1, Math.floor(vergangeneTage) + 1));
 
     if (vergangeneTage < TRIAL_TAGE) {
-        return { freigeschaltet: true, grund: 'testzeitraum', tageVerbleibend, kontaktEmail: KONTAKT_EMAIL };
+        return {
+            freigeschaltet: true, grund: 'testzeitraum', tageVerbleibend, tageVergangen,
+            trialTage: TRIAL_TAGE, kontaktEmail: KONTAKT_EMAIL
+        };
     }
-    return { freigeschaltet: false, grund: 'abgelaufen', tageVerbleibend: 0, kontaktEmail: KONTAKT_EMAIL };
+    return {
+        freigeschaltet: false, grund: 'abgelaufen', tageVerbleibend: 0, tageVergangen: TRIAL_TAGE,
+        trialTage: TRIAL_TAGE, kontaktEmail: KONTAKT_EMAIL
+    };
 }
 
 // Versucht, einen vom Nutzer eingegebenen Schlüssel einzulösen - bei

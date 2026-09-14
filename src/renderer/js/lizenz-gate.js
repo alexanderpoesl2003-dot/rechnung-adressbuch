@@ -13,8 +13,8 @@ async function pruefeLizenzGate() {
     }
 
     if (status.freigeschaltet) {
-        if (status.grund === 'testzeitraum' && status.tageVerbleibend <= 3) {
-            zeigeTestzeitraumHinweis(status.tageVerbleibend);
+        if (status.grund === 'testzeitraum') {
+            zeigeTestzeitraumHinweis(status);
         }
         return true;
     }
@@ -59,19 +59,36 @@ async function pruefeLizenzGate() {
     });
 }
 
-// Kleiner, nicht blockierender Hinweis in den letzten Testtagen - erinnert
-// rechtzeitig, ohne die Arbeit zu unterbrechen (anders als die eigentliche
-// Sperre nach Ablauf).
-function zeigeTestzeitraumHinweis(tageVerbleibend) {
-    const text = tageVerbleibend === 0
+// Nicht blockierender Hinweis bei JEDEM Programmstart während der
+// Testphase (siehe Auftrag "Testzeitraum-Hinweis bei jedem Öffnen") -
+// zeigt Tag X von Y, verbleibende Tage und die Kontakt-E-Mail für einen
+// Schlüssel. Lässt sich schließen, ohne die Arbeit zu unterbrechen -
+// anders als die eigentliche Sperre nach Ablauf des Testzeitraums.
+function zeigeTestzeitraumHinweis(status) {
+    const restText = status.tageVerbleibend === 0
         ? 'Der Testzeitraum endet heute.'
-        : `Noch ${tageVerbleibend} Tag${tageVerbleibend === 1 ? '' : 'e'} Testzeitraum.`;
-    const hinweis = el(`
-        <div style="position:fixed;bottom:12px;right:12px;background:#fffbea;border:1px solid #f0c36d;
-                     color:#7a5b00;padding:8px 14px;border-radius:6px;font-size:12px;z-index:999;">
-            ${escapeHtml(text)}
+        : `Noch ${status.tageVerbleibend} Tag${status.tageVerbleibend === 1 ? '' : 'e'} übrig.`;
+
+    const overlay = el(`
+        <div id="testzeitraum-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.35);
+                     display:flex;align-items:center;justify-content:center;z-index:1000;">
+            <div style="background:#fff;border-radius:10px;padding:28px 32px;max-width:380px;text-align:center;
+                        box-shadow:0 8px 30px rgba(0,0,0,0.25);">
+                <h2 style="margin-top:0;">Testversion – Tag ${status.tageVergangen} von ${status.trialTage}</h2>
+                <p>${escapeHtml(restText)}</p>
+                <p>Sie haben noch keinen Produktschlüssel? Schreiben Sie uns gerne eine E-Mail an
+                    <strong>${escapeHtml(status.kontaktEmail)}</strong> und fragen Sie kurz nach einem Schlüssel.
+                </p>
+                <p style="font-size:12px;color:#98a2b3;">Den Schlüssel können Sie jederzeit unter
+                    "Einstellungen -> Produktschlüssel" eingeben, auch schon vor Ablauf der Testphase.</p>
+                <button type="button" class="btn btn-primary" id="testzeitraum-schliessen" style="margin-top:8px;">
+                    Weiter zur Software
+                </button>
+            </div>
         </div>
     `);
-    document.body.appendChild(hinweis);
-    setTimeout(() => hinweis.remove(), 6000);
+    document.body.appendChild(overlay);
+    function schliessen() { overlay.remove(); }
+    overlay.querySelector('#testzeitraum-schliessen').addEventListener('click', schliessen);
+    overlay.addEventListener('click', (ereignis) => { if (ereignis.target === overlay) schliessen(); });
 }

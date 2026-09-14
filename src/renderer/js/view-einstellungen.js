@@ -9,6 +9,9 @@ async function renderEinstellungen(container) {
         <div>
             <h1>Einstellungen</h1>
 
+            <h2>Produktschlüssel</h2>
+            <div id="lizenz-bereich"></div>
+
             <h2>Datensicherung</h2>
             <p>Erstellt eine eigenständige Kopie der kompletten Datenbank (Kunden, Rechnungen, Belege, Artikel, ...) an einem frei wählbaren Speicherort.</p>
             <button class="btn btn-primary" id="btn-backup">Backup jetzt erstellen</button>
@@ -67,6 +70,7 @@ async function renderEinstellungen(container) {
         }
     });
 
+    await renderLizenzBereich(container.querySelector('#lizenz-bereich'));
     await renderTextbausteineBereich(container.querySelector('#textbausteine-bereich'));
     await renderEmailVersandBereich(container.querySelector('#email-versand-bereich'));
 
@@ -306,6 +310,57 @@ async function renderEmailVersandBereich(bereich) {
         } finally {
             btn.disabled = false;
             btn.textContent = 'Testmail senden';
+        }
+    });
+}
+
+// Produktschlüssel: Status anzeigen + jederzeit einlösbar (auch VOR Ablauf
+// des Testzeitraums, siehe Auftrag "Schlüssel jederzeit eingeben können") -
+// ergänzt die Sperre in lizenz-gate.js, die nur nach Ablauf erscheint.
+async function renderLizenzBereich(bereich) {
+    const status = await window.api.lizenz.status();
+
+    bereich.innerHTML = '';
+    if (status.grund === 'lizenziert') {
+        bereich.appendChild(el(`
+            <div>
+                <p>Status: <strong style="color:#12794c;">freigeschaltet</strong></p>
+            </div>
+        `));
+        return;
+    }
+
+    const statusText = status.grund === 'abgelaufen'
+        ? 'Testzeitraum abgelaufen - Software ist gesperrt, bis ein gültiger Schlüssel eingegeben wird.'
+        : `Testversion, Tag ${status.tageVergangen} von ${status.trialTage} (noch ${status.tageVerbleibend} Tag${status.tageVerbleibend === 1 ? '' : 'e'}).`;
+
+    bereich.appendChild(el(`
+        <div>
+            <p>Status: <strong>${escapeHtml(statusText)}</strong></p>
+            <form class="formular" id="lizenz-einloesen-formular" style="max-width:360px;">
+                <label>Produktschlüssel
+                    <input type="text" name="schluessel" placeholder="AP-XXXXX-XXXX-XXXX" style="text-align:center;letter-spacing:1px;" />
+                </label>
+                <div class="formular-aktionen">
+                    <button type="submit" class="btn btn-primary">Einlösen</button>
+                </div>
+            </form>
+        </div>
+    `));
+
+    bereich.querySelector('#lizenz-einloesen-formular').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const schluessel = event.target.schluessel.value;
+        try {
+            const ok = await window.api.lizenz.einloesen(schluessel);
+            if (ok) {
+                alert('Schlüssel wurde erfolgreich eingelöst - die Software ist jetzt dauerhaft freigeschaltet.');
+                renderLizenzBereich(bereich);
+            } else {
+                showFehler('Dieser Schlüssel ist ungültig.');
+            }
+        } catch (err) {
+            showFehler(err.message);
         }
     });
 }
