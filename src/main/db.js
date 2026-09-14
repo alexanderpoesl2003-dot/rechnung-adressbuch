@@ -30,7 +30,6 @@ function initDatabase() {
     db.exec(schema);
 
     runMigrations();
-    seedDefaultProfiles();
     seedBelegZaehler();
     seedMwstSaetze();
 
@@ -93,31 +92,6 @@ function seedBelegZaehler() {
             insert.run(p.id, typ, def.prefix);
         }
     }
-}
-
-function seedDefaultProfiles() {
-    const count = db.prepare('SELECT COUNT(*) AS n FROM sender_profiles').get().n;
-    if (count > 0) return;
-
-    const insert = db.prepare(`
-        INSERT INTO sender_profiles
-            (name, briefkopf_name, rechnungsnummer_prefix, naechste_laufnummer)
-        VALUES (@name, @briefkopf_name, @rechnungsnummer_prefix, @naechste_laufnummer)
-    `);
-
-    insert.run({
-        name: 'Biohof Pösl',
-        briefkopf_name: 'Biohof Pösl',
-        rechnungsnummer_prefix: 'R',
-        naechste_laufnummer: 91
-    });
-
-    insert.run({
-        name: 'Maschinengemeinschaft',
-        briefkopf_name: 'Maschinengemeinschaft',
-        rechnungsnummer_prefix: 'R',
-        naechste_laufnummer: 1
-    });
 }
 
 function getDb() {
