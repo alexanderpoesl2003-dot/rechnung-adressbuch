@@ -101,7 +101,7 @@ const LETZTE_PRUEFUNG_SCHLUESSEL = 'lizenz_letzte_pruefung';
 const WIDERRUF_SCHLUESSEL = 'lizenz_widerruf';
 const TAG_MS = 1000 * 60 * 60 * 24;
 
-const KONTAKT_EMAIL = 'alexanderpoesl2003@icloud.com';
+const KONTAKT_EMAIL = 'ap-handel@gmx.de';
 
 // 32 gut unterscheidbare Zeichen (keine 0/O- oder 1/I-Verwechslungsgefahr),
 // eigenes Alphabet statt RFC4648-Base32 - einfacher zu implementieren, da

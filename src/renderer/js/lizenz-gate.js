@@ -67,7 +67,7 @@ async function pruefeLizenzGate() {
                 <div style="max-width:440px;margin:100px auto;text-align:center;">
                     <h1>${escapeHtml(texte.titel)}</h1>
                     <p>${escapeHtml(texte.text)}</p>
-                    <p><strong>${escapeHtml(status.kontaktEmail)}</strong></p>
+                    <p><strong style="white-space:nowrap;">${escapeHtml(status.kontaktEmail)}</strong></p>
                     ${fehler ? `<p style="color:#b42318;">${escapeHtml(fehler)}</p>` : ''}
                     ${texte.mitAktivieren ? `
                         <button type="button" class="btn btn-primary" id="lizenz-aktivieren" style="width:100%;margin-bottom:24px;">
@@ -167,7 +167,7 @@ function zeigeTestzeitraumHinweis(status) {
                 <h2 style="margin-top:0;">Testversion – Tag ${status.tageVergangen} von ${status.trialTage}</h2>
                 <p>${escapeHtml(restText)}</p>
                 <p>Sie haben noch keinen Produktschlüssel? Schreiben Sie uns gerne eine E-Mail an
-                    <strong>${escapeHtml(status.kontaktEmail)}</strong> und fragen Sie kurz nach einem Schlüssel.
+                    <strong style="white-space:nowrap;">${escapeHtml(status.kontaktEmail)}</strong> und fragen Sie kurz nach einem Schlüssel.
                 </p>
                 <p style="font-size:12px;color:#98a2b3;">Den Schlüssel können Sie jederzeit unter
                     "Einstellungen -> Produktschlüssel" eingeben, auch schon vor Ablauf der Testphase.</p>
