@@ -31,13 +31,28 @@
 // Schlüssel bleibt dauerhaft gültig (kein "Verbrauch"); geht der
 // gespeicherte Zustand doch einmal verloren (z.B. nach einem Update), zeigt
 // die App einfach wieder die Sperre - derselbe Schlüssel schaltet sie erneut
-// frei, beliebig oft. Keine Gerätebindung, keine Online-Aktivierung.
+// frei, beliebig oft.
+//
+// ONLINE-AKTIVIERUNG (ab Version 0.6.0, Auftrag "Lizenz-Aktivierung und
+// Sperrliste"): Ein Schlüssel gilt nur noch auf EINEM Rechner. Beim Einlösen
+// fragt die App einmalig den Aktivierungsdienst (lizenz.ap-services-online.de)
+// und speichert das signierte Aktivierungs-Token (aktivierung-format.js).
+// Danach läuft sie offline weiter. Freigeschaltet ist nur, wenn Lizenz UND
+// Token gültig sind, das Token zu diesem Rechner passt und die Seriennummer
+// nicht in GESPERRTE_SERIENNUMMERN steht.
+// Etwa alle 7 Tage fragt die App (nur wenn online, nie blockierend) nach, ob
+// die Lizenz gesperrt oder auf einem anderen Rechner aktiviert wurde.
+// Bestandskunden (Schlüssel vor 0.6.0 eingelöst, noch kein Token) werden im
+// Hintergrund aktiviert und haben dafür 30 Tage Zeit.
+// Auch hier gilt: gesperrt wird nur die Oberfläche, nie werden Daten gelöscht.
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
 const settings = require('../models/settings');
 const { envelopeZerlegen, PRODUCT_ID, FORMAT_VERSION } = require('./lizenz-format');
+const { tokenPruefen } = require('./aktivierung-format');
+const { geraetKennung } = require('./geraete-kennung');
 
 // Öffentlicher Ed25519-Schlüssel des Lizenzverwaltungs-Tools - KEIN Geheimnis,
 // darf offen im Quellcode/Build liegen (siehe Auftrag Block 3, Punkt 18).
@@ -50,15 +65,41 @@ MCowBQYDK2VwAyEALPcGLoht1nfw4DxdOMu2fGbf/jH2Ay7D9vpjnpXeSLY=
 -----END PUBLIC KEY-----
 `;
 
-let ed25519PublicKeyObjekt = null;
 function ed25519PublicKey() {
-    if (!ed25519PublicKeyObjekt) ed25519PublicKeyObjekt = crypto.createPublicKey(ED25519_PUBLIC_KEY_PEM);
-    return ed25519PublicKeyObjekt;
+    return crypto.createPublicKey(umgebung.lizenzPublicKeyPem);
 }
+
+// Öffentlicher Teil des Aktivierungsschlüssels (privater Teil nur auf dem
+// S930) - prüft die Aktivierungs-Tokens. KEIN Geheimnis.
+const AKTIVIERUNG_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAxKSkaCRYOgSofWL+dvEUgjc9QUeIVEQR2WIf+9sdk0Y=
+-----END PUBLIC KEY-----
+`;
+const AKTIVIERUNG_URL = 'https://lizenz.ap-services-online.de';
+const NACHPRUEFUNG_TAGE = 7;
+const AKTIVIERUNG_FRIST_TAGE = 30;
+const ONLINE_TIMEOUT_MS = 10000;
+
+// Nur für die Tests austauschbar (siehe test/lizenz-aktivierung.test.js).
+const umgebung = {
+    lizenzPublicKeyPem: ED25519_PUBLIC_KEY_PEM,
+    aktivierungPublicKeyPem: AKTIVIERUNG_PUBLIC_KEY_PEM,
+    aktivierungUrl: AKTIVIERUNG_URL,
+    fetch: null,
+    geraetKennung,
+    gesperrteSeriennummern: null, // wird unten auf GESPERRTE_SERIENNUMMERN gesetzt
+    jetzt: () => Date.now()
+};
 
 const TRIAL_TAGE = 30;
 const INSTALLIERT_AM_SCHLUESSEL = 'lizenz_installiert_am';
 const SCHLUESSEL_SCHLUESSEL = 'lizenz_schluessel';
+const TOKEN_SCHLUESSEL = 'lizenz_aktivierung_token';
+const FRIST_AB_SCHLUESSEL = 'lizenz_aktivierung_frist_ab';
+const LETZTE_PRUEFUNG_SCHLUESSEL = 'lizenz_letzte_pruefung';
+// 'gesperrt' | 'anderer_rechner' - vom Server gemeldet, sperrt die Oberfläche.
+const WIDERRUF_SCHLUESSEL = 'lizenz_widerruf';
+const TAG_MS = 1000 * 60 * 60 * 24;
 
 const KONTAKT_EMAIL = 'alexanderpoesl2003@icloud.com';
 
@@ -71,11 +112,13 @@ const BASIS = BigInt(ALPHABET.length);
 
 const MAX_SERIENNUMMER = 16777215; // 2^24 - 1, reichlich Luft für Einzelschlüssel
 
-// Hier künftig Seriennummern eintragen, die trotz korrekter Prüfsumme nicht
-// mehr akzeptiert werden sollen (z.B. bei Missbrauch) - wirkt erst, sobald
-// die betroffene Installation die nächste App-Version bekommt (kein
-// Online-Abgleich, siehe Moduldoc oben).
+// Sperrliste: Seriennummern, die trotz gültiger Signatur nicht mehr
+// akzeptiert werden (z.B. bei Missbrauch) - auch nicht mit Aktivierungs-Token.
+// Die fertige Zeile steht auf der Lizenzseite (S930) unter "Gesperrte
+// Seriennummern". Die Online-Nachprüfung sperrt meist schon vorher; diese
+// Liste wirkt zusätzlich bei Rechnern, die nie online gehen.
 const GESPERRTE_SERIENNUMMERN = [];
+umgebung.gesperrteSeriennummern = GESPERRTE_SERIENNUMMERN;
 
 let geheimnisCache = null;
 
@@ -240,19 +283,85 @@ function ersteStartzeitSicherstellen() {
     }
 }
 
+function aktivierungPublicKey() {
+    return crypto.createPublicKey(umgebung.aktivierungPublicKeyPem);
+}
+
+function jetztIso() {
+    return new Date(umgebung.jetzt()).toISOString();
+}
+
+// Seriennummer steht in der eingebauten Sperrliste (Lizenz sonst gültig signiert)?
+function stehtAufSperrliste(eingabe) {
+    const zerlegt = envelopeZerlegen(eingabe);
+    if (!zerlegt || !GESPERRTE_SERIENNUMMERN.includes(zerlegt.payload.serial)) return false;
+    try {
+        return crypto.verify(null, zerlegt.payloadBytes, ed25519PublicKey(), zerlegt.signatur);
+    } catch {
+        return false;
+    }
+}
+
+// Passt das gespeicherte Aktivierungs-Token zu dieser Lizenz und diesem Rechner?
+function tokenPasst(serial) {
+    const payload = tokenPruefen(settings.getWert(TOKEN_SCHLUESSEL), aktivierungPublicKey());
+    if (!payload || payload.serial !== serial) return false;
+    try {
+        return payload.geraet === umgebung.geraetKennung();
+    } catch {
+        return false;
+    }
+}
+
+function widerrufLesen() {
+    return settings.getWert(WIDERRUF_SCHLUESSEL) || null;
+}
+
+// Status einer eingelösten Ed25519-Lizenz: aktiviert, gesperrt oder (für
+// Bestandskunden ohne Token) innerhalb bzw. nach der Aktivierungsfrist.
+function aktivierungsstatus(serial) {
+    const widerruf = widerrufLesen();
+    if (widerruf) return { freigeschaltet: false, grund: widerruf };
+    if (tokenPasst(serial)) return { freigeschaltet: true, grund: 'lizenziert' };
+    // Ein vorhandenes, aber unpassendes Token (z.B. Datenbank auf einen anderen
+    // Rechner kopiert) bekommt keine Frist - die gilt nur für Bestandskunden,
+    // die vor der Online-Aktivierung noch nie ein Token hatten.
+    if (settings.getWert(TOKEN_SCHLUESSEL)) return { freigeschaltet: false, grund: 'aktivierung_noetig' };
+
+    let fristAb = settings.getWert(FRIST_AB_SCHLUESSEL);
+    if (!fristAb) {
+        fristAb = jetztIso();
+        settings.setWert(FRIST_AB_SCHLUESSEL, fristAb);
+    }
+    const vergangeneTage = (umgebung.jetzt() - new Date(fristAb).getTime()) / TAG_MS;
+    if (vergangeneTage < AKTIVIERUNG_FRIST_TAGE) {
+        return {
+            freigeschaltet: true, grund: 'aktivierung_ausstehend',
+            aktivierungTageVerbleibend: Math.max(1, Math.ceil(AKTIVIERUNG_FRIST_TAGE - vergangeneTage))
+        };
+    }
+    return { freigeschaltet: false, grund: 'aktivierung_noetig' };
+}
+
 // Gibt den aktuellen Freischaltstatus zurück - wird bei jedem Programmstart
 // vom Renderer abgefragt (siehe lizenz-gate.js), analog zu
-// settings.isPasswordSet()/login-gate.js.
+// settings.isPasswordSet()/login-gate.js. Arbeitet immer offline.
+// grund: 'lizenziert' | 'aktivierung_ausstehend' | 'testzeitraum'
+//      | 'abgelaufen' | 'aktivierung_noetig' | 'gesperrt' | 'anderer_rechner'
 function lizenzstatus() {
     ersteStartzeitSicherstellen();
+    const basis = { tageVerbleibend: null, tageVergangen: null, trialTage: TRIAL_TAGE, kontaktEmail: KONTAKT_EMAIL };
 
     const gespeicherterSchluessel = settings.getWert(SCHLUESSEL_SCHLUESSEL);
     if (gespeicherterSchluessel && schluesselPruefen(gespeicherterSchluessel)) {
-        return {
-            freigeschaltet: true, grund: 'lizenziert', tageVerbleibend: null, tageVergangen: null,
-            trialTage: TRIAL_TAGE, kontaktEmail: KONTAKT_EMAIL,
-            format: schluesselFormat(gespeicherterSchluessel)
-        };
+        const format = schluesselFormat(gespeicherterSchluessel);
+        const status = format === 'ed25519'
+            ? aktivierungsstatus(pruefeEd25519Lizenz(gespeicherterSchluessel).serial)
+            : { freigeschaltet: true, grund: 'lizenziert' };
+        return { ...basis, ...status, format };
+    }
+    if (gespeicherterSchluessel && stehtAufSperrliste(gespeicherterSchluessel)) {
+        return { ...basis, freigeschaltet: false, grund: 'gesperrt' };
     }
 
     const installiertAm = new Date(settings.getWert(INSTALLIERT_AM_SCHLUESSEL));
@@ -263,38 +372,169 @@ function lizenzstatus() {
     const tageVergangen = Math.min(TRIAL_TAGE, Math.max(1, Math.floor(vergangeneTage) + 1));
 
     if (vergangeneTage < TRIAL_TAGE) {
-        return {
-            freigeschaltet: true, grund: 'testzeitraum', tageVerbleibend, tageVergangen,
-            trialTage: TRIAL_TAGE, kontaktEmail: KONTAKT_EMAIL
-        };
+        return { ...basis, freigeschaltet: true, grund: 'testzeitraum', tageVerbleibend, tageVergangen };
     }
-    return {
-        freigeschaltet: false, grund: 'abgelaufen', tageVerbleibend: 0, tageVergangen: TRIAL_TAGE,
-        trialTage: TRIAL_TAGE, kontaktEmail: KONTAKT_EMAIL
-    };
+    return { ...basis, freigeschaltet: false, grund: 'abgelaufen', tageVerbleibend: 0, tageVergangen: TRIAL_TAGE };
 }
 
-// Versucht, einen vom Nutzer eingegebenen Schlüssel einzulösen - bei
-// Erfolg dauerhaft gespeichert (kein erneutes Abfragen mehr, siehe
-// Moduldoc). Wirft nie - gibt bei ungültigem Schlüssel einfach false zurück.
-function schluesselEinloesen(eingabe) {
+// --- Online: Aktivierung und Nachprüfung -------------------------------------
+
+const FEHLERTEXTE = {
+    offline: 'Für die einmalige Aktivierung wird eine Internetverbindung benötigt. '
+        + 'Bitte prüfen Sie die Verbindung und versuchen Sie es erneut.',
+    ungueltig: 'Dieser Schlüssel ist ungültig.',
+    gesperrt: `Dieser Lizenzschlüssel wurde gesperrt. Bitte wenden Sie sich an AP Services (${KONTAKT_EMAIL}).`,
+    bereits_aktiviert: 'Dieser Lizenzschlüssel ist bereits auf einem anderen Computer aktiviert. '
+        + `Bitte wenden Sie sich an AP Services (${KONTAKT_EMAIL}).`,
+    zu_viele: 'Zu viele Aktivierungsversuche. Bitte versuchen Sie es in einer Stunde erneut.',
+    serverfehler: 'Der Aktivierungsserver antwortet gerade nicht richtig. Bitte versuchen Sie es später erneut.'
+};
+
+function standardFetch(url, optionen) {
+    // net.fetch nutzt die Proxy-Einstellungen des Systems (wichtig in Firmennetzen).
+    return require('electron').net.fetch(url, optionen);
+}
+
+function appVersion() {
+    try {
+        return require('electron').app.getVersion();
+    } catch {
+        return null;
+    }
+}
+
+// Liefert { status, daten }. status 0 = keine Verbindung / Zeitüberschreitung.
+async function onlineAnfrage(pfad, body) {
+    let antwort;
+    try {
+        antwort = await (umgebung.fetch || standardFetch)(`${umgebung.aktivierungUrl}${pfad}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(ONLINE_TIMEOUT_MS)
+        });
+    } catch {
+        return { status: 0, daten: null };
+    }
+    const daten = await antwort.json().catch(() => null);
+    return { status: antwort.status, daten: daten || {} };
+}
+
+// Aktiviert eine (offline bereits geprüfte) Lizenz auf diesem Rechner und
+// speichert bei Erfolg Lizenz + Token. Liefert 'ok' oder einen Schlüssel aus
+// FEHLERTEXTE. Meldet der Server für die bereits gespeicherte Lizenz
+// "gesperrt" oder "anderer Rechner", wird das als Widerruf vermerkt.
+async function aktivierenOnline(lizenz, serial) {
+    const geraet = umgebung.geraetKennung(); // wirft mit verständlicher Meldung
+    const { status, daten } = await onlineAnfrage('/api/aktivieren', { lizenz, geraet, appVersion: appVersion() });
+
+    if (status === 200) {
+        const payload = tokenPruefen(daten.token, aktivierungPublicKey());
+        if (!payload || payload.serial !== serial || payload.geraet !== geraet) return 'serverfehler';
+        settings.setWert(SCHLUESSEL_SCHLUESSEL, lizenz);
+        settings.setWert(TOKEN_SCHLUESSEL, daten.token);
+        settings.setWert(LETZTE_PRUEFUNG_SCHLUESSEL, jetztIso());
+        settings.setWert(WIDERRUF_SCHLUESSEL, null);
+        return 'ok';
+    }
+    const ergebnis = { 0: 'offline', 400: 'ungueltig', 403: 'gesperrt', 409: 'bereits_aktiviert', 429: 'zu_viele' }[status]
+        || 'serverfehler';
+    if (lizenz === settings.getWert(SCHLUESSEL_SCHLUESSEL)) {
+        if (ergebnis === 'gesperrt') settings.setWert(WIDERRUF_SCHLUESSEL, 'gesperrt');
+        if (ergebnis === 'bereits_aktiviert') settings.setWert(WIDERRUF_SCHLUESSEL, 'anderer_rechner');
+    }
+    return ergebnis;
+}
+
+// Versucht, einen vom Nutzer eingegebenen Schlüssel einzulösen: erst offline
+// prüfen, dann online auf diesem Rechner aktivieren. Gibt false zurück, wenn
+// der Schlüssel schon offline ungültig ist, true bei Erfolg, und wirft bei
+// allen anderen Fehlern mit einer verständlichen deutschen Meldung.
+async function schluesselEinloesen(eingabe) {
     if (!schluesselPruefen(eingabe)) return false;
-    settings.setWert(SCHLUESSEL_SCHLUESSEL, String(eingabe).trim());
+    const bereinigt = String(eingabe).trim();
+    if (schluesselFormat(bereinigt) === 'legacy-hmac') {
+        settings.setWert(SCHLUESSEL_SCHLUESSEL, bereinigt);
+        return true;
+    }
+    const ergebnis = await aktivierenOnline(bereinigt, pruefeEd25519Lizenz(bereinigt).serial);
+    if (ergebnis !== 'ok') throw new Error(FEHLERTEXTE[ergebnis]);
     return true;
+}
+
+// "Jetzt aktivieren" für die bereits gespeicherte Lizenz (Bestandskunden,
+// oder nachdem AP Services die Aktivierung zurückgesetzt hat).
+async function gespeichertenSchluesselAktivieren() {
+    const gespeichert = settings.getWert(SCHLUESSEL_SCHLUESSEL);
+    if (!gespeichert) throw new Error('Es ist noch kein Produktschlüssel gespeichert.');
+    if (!(await schluesselEinloesen(gespeichert))) throw new Error(FEHLERTEXTE.ungueltig);
+    return true;
+}
+
+function nachpruefungFaellig() {
+    const letzte = settings.getWert(LETZTE_PRUEFUNG_SCHLUESSEL);
+    return !letzte || umgebung.jetzt() - new Date(letzte).getTime() >= NACHPRUEFUNG_TAGE * TAG_MS;
+}
+
+// Läuft bei jedem Programmstart im Hintergrund (siehe main.js) und blockiert
+// nie: ohne Internet passiert einfach nichts. Aktiviert Bestandsinstallationen
+// ohne Token und fragt etwa alle 7 Tage nach, ob die Lizenz gesperrt oder auf
+// einem anderen Rechner aktiviert wurde. Liefert true, wenn sich dadurch der
+// Freischaltzustand geändert hat (dann lädt main.js die Oberfläche neu).
+async function hintergrundAbgleich() {
+    const gespeichert = settings.getWert(SCHLUESSEL_SCHLUESSEL);
+    const payload = gespeichert && String(gespeichert).startsWith('AP1.') ? pruefeEd25519Lizenz(gespeichert) : null;
+    if (!payload) return false;
+
+    let geraet;
+    try {
+        geraet = umgebung.geraetKennung();
+    } catch {
+        return false;
+    }
+    const vorher = lizenzstatus().freigeschaltet;
+    const widerruf = widerrufLesen();
+
+    if (!widerruf && !tokenPasst(payload.serial)) {
+        await aktivierenOnline(gespeichert, payload.serial);
+    } else if (widerruf || nachpruefungFaellig()) {
+        const { status, daten } = await onlineAnfrage('/api/pruefen', { lizenz: gespeichert, geraet });
+        if (status === 200) {
+            settings.setWert(LETZTE_PRUEFUNG_SCHLUESSEL, jetztIso());
+            if (daten.gesperrt) {
+                settings.setWert(WIDERRUF_SCHLUESSEL, 'gesperrt');
+            } else if (daten.gueltig) {
+                settings.setWert(WIDERRUF_SCHLUESSEL, null);
+            } else if (daten.grund === 'anderes_geraet') {
+                settings.setWert(WIDERRUF_SCHLUESSEL, 'anderer_rechner');
+            } else if (widerruf === 'gesperrt') {
+                // Entsperrt, aber (noch) auf keinem Rechner aktiviert: gleich hier aktivieren.
+                settings.setWert(WIDERRUF_SCHLUESSEL, null);
+                if (!tokenPasst(payload.serial)) await aktivierenOnline(gespeichert, payload.serial);
+            }
+            // 'nicht_aktiviert' ohne Widerruf: Aktivierung wurde zurückgesetzt, das
+            // Token gilt hier weiter, bis ein anderer Rechner aktiviert wird.
+        }
+    }
+    return lizenzstatus().freigeschaltet !== vorher;
 }
 
 // Zentrale, einfache Main-seitige Lizenzprüfung (siehe Auftrag "IPC-Härtung",
 // Punkt 11): wird von zentralen Schreib-/Nutzfunktionen aufgerufen (siehe
 // ipc/register.js), damit ein abgelaufener Testzeitraum nicht allein dadurch
 // umgangen werden kann, dass die UI übersprungen und ein IPC-Kanal direkt
-// aufgerufen wird. Ändert NICHTS am Lizenzformat/-algorithmus selbst (siehe
-// Block 3) - reine Statusabfrage der bestehenden lizenzstatus()-Funktion.
+// aufgerufen wird. Reine Statusabfrage der lizenzstatus()-Funktion (offline).
 function requireLizenz() {
-    if (!lizenzstatus().freigeschaltet) {
-        throw new Error(
-            'Der Testzeitraum ist abgelaufen. Bitte geben Sie einen gültigen Produktschlüssel ein ' +
-            '(Einstellungen -> Produktschlüssel).'
-        );
+    const status = lizenzstatus();
+    if (!status.freigeschaltet) {
+        const texte = {
+            gesperrt: FEHLERTEXTE.gesperrt,
+            anderer_rechner: FEHLERTEXTE.bereits_aktiviert,
+            aktivierung_noetig: 'Ihre Lizenz muss einmalig online aktiviert werden (Einstellungen -> Produktschlüssel).'
+        };
+        throw new Error(texte[status.grund]
+            || 'Der Testzeitraum ist abgelaufen. Bitte geben Sie einen gültigen Produktschlüssel ein '
+            + '(Einstellungen -> Produktschlüssel).');
     }
 }
 
@@ -303,7 +543,10 @@ module.exports = {
     KONTAKT_EMAIL,
     lizenzstatus,
     schluesselEinloesen,
+    gespeichertenSchluesselAktivieren,
+    hintergrundAbgleich,
     schluesselErzeugen,
     schluesselPruefen,
-    requireLizenz
+    requireLizenz,
+    _umgebung: umgebung
 };

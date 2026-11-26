@@ -5,6 +5,7 @@ const { registerIpcHandlers } = require('./ipc/register');
 const { checkForUpdates } = require('./updater');
 const { migriereSmtpPasswortFallsNoetig } = require('./services/rechnung-versand');
 const { autoBackupFallsFaelligAusfuehren } = require('./services/auto-backup');
+const { hintergrundAbgleich } = require('./services/lizenz');
 
 let mainWindow = null;
 
@@ -80,6 +81,12 @@ app.whenReady().then(() => {
     registerIpcHandlers();
     createWindow();
     checkForUpdates();
+    // Lizenz-Aktivierung/Nachprüfung im Hintergrund (siehe services/lizenz.js) -
+    // blockiert nie. Ändert sich dadurch der Freischaltzustand (z.B. Lizenz
+    // gesperrt), wird die Oberfläche neu geladen, damit die Sperre greift.
+    hintergrundAbgleich().then((geaendert) => {
+        if (geaendert && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.reload();
+    }).catch((err) => console.error('Lizenz-Abgleich fehlgeschlagen:', err.message));
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();

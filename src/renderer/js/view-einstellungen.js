@@ -443,10 +443,33 @@ async function renderLizenzBereich(bereich) {
         `));
         return;
     }
+    if (status.grund === 'aktivierung_ausstehend') {
+        const tage = status.aktivierungTageVerbleibend;
+        bereich.appendChild(el(`
+            <div>
+                <p>Status: <strong>freigeschaltet, Online-Aktivierung steht noch aus
+                    (noch ${tage} Tag${tage === 1 ? '' : 'e'})</strong></p>
+                <p style="font-size:12px;color:#98a2b3;">${escapeHtml(LIZENZ_DATENSCHUTZ_HINWEIS)}</p>
+                <button type="button" class="btn btn-primary" id="lizenz-jetzt-aktivieren">Jetzt aktivieren</button>
+            </div>
+        `));
+        const knopf = bereich.querySelector('#lizenz-jetzt-aktivieren');
+        knopf.addEventListener('click', async () => {
+            knopf.disabled = true;
+            try {
+                await window.api.lizenz.aktivieren();
+                renderLizenzBereich(bereich);
+            } catch (err) {
+                showFehler(err.message);
+                knopf.disabled = false;
+            }
+        });
+        return;
+    }
 
-    const statusText = status.grund === 'abgelaufen'
-        ? 'Testzeitraum abgelaufen - Software ist gesperrt, bis ein gültiger Schlüssel eingegeben wird.'
-        : `Testversion, Tag ${status.tageVergangen} von ${status.trialTage} (noch ${status.tageVerbleibend} Tag${status.tageVerbleibend === 1 ? '' : 'e'}).`;
+    const statusText = status.grund === 'testzeitraum'
+        ? `Testversion, Tag ${status.tageVergangen} von ${status.trialTage} (noch ${status.tageVerbleibend} Tag${status.tageVerbleibend === 1 ? '' : 'e'}).`
+        : 'Software ist gesperrt - siehe Hinweis beim Programmstart.';
 
     bereich.appendChild(el(`
         <div>
@@ -459,21 +482,26 @@ async function renderLizenzBereich(bereich) {
                     <button type="submit" class="btn btn-primary">Einlösen</button>
                 </div>
             </form>
+            <p style="font-size:12px;color:#98a2b3;max-width:480px;">${escapeHtml(LIZENZ_DATENSCHUTZ_HINWEIS)}</p>
         </div>
     `));
 
     bereich.querySelector('#lizenz-einloesen-formular').addEventListener('submit', async (event) => {
         event.preventDefault();
         const schluessel = event.target.schluessel.value;
+        const knopf = event.target.querySelector('button[type="submit"]');
+        knopf.disabled = true;
         try {
             const ok = await window.api.lizenz.einloesen(schluessel);
+            knopf.disabled = false;
             if (ok) {
-                alert('Schlüssel wurde erfolgreich eingelöst - die Software ist jetzt dauerhaft freigeschaltet.');
+                alert('Schlüssel wurde erfolgreich eingelöst und auf diesem Computer aktiviert.');
                 renderLizenzBereich(bereich);
             } else {
                 showFehler('Dieser Schlüssel ist ungültig.');
             }
         } catch (err) {
+            knopf.disabled = false;
             showFehler(err.message);
         }
     });

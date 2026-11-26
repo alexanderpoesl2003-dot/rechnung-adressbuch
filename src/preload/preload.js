@@ -92,7 +92,8 @@ contextBridge.exposeInMainWorld('api', {
     },
     lizenz: {
         status: () => invoke('lizenz:status'),
-        einloesen: (schluessel) => invoke('lizenz:einloesen', schluessel)
+        einloesen: (schluessel) => invoke('lizenz:einloesen', schluessel),
+        aktivieren: () => invoke('lizenz:aktivieren')
     },
     settings: {
         isPasswordSet: () => invoke('settings:isPasswordSet'),

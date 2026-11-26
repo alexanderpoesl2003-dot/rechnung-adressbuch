@@ -395,6 +395,7 @@ function registerIpcHandlers() {
     // Weitergabe")
     handle('lizenz:status', () => lizenz.lizenzstatus());
     handle('lizenz:einloesen', (schluessel) => lizenz.schluesselEinloesen(schluessel));
+    handle('lizenz:aktivieren', () => lizenz.gespeichertenSchluesselAktivieren());
 
     // Passwortschutz - verifyPassword ist der Anmeldevorgang selbst (darf nie
     // die Anmeldung voraussetzen); setPassword/removePassword ändern den
